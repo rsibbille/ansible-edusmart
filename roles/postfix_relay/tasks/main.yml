@@ -1,0 +1,80 @@
+---
+- name: Préconfigurer le type d'installation Postfix
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "Satellite system"
+    vtype: select
+
+- name: Préconfigurer le nom de courrier Postfix
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/mailname
+    value: "{{ postfix_mydomain }}"
+    vtype: string
+
+- name: Installer Postfix et les outils SMTP
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - mailutils
+      - swaks
+    state: present
+    update_cache: true
+
+- name: Déployer la configuration Postfix
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Redémarrer Postfix
+
+- name: Déployer les alias Postfix
+  ansible.builtin.template:
+    src: aliases.j2
+    dest: /etc/aliases
+    owner: root
+    group: root
+    mode: "0644"
+  register: postfix_aliases
+
+- name: Générer la base des alias
+  ansible.builtin.command:
+    cmd: newaliases
+  when: postfix_aliases.changed
+
+- name: Vérifier la configuration Postfix
+  ansible.builtin.command:
+    cmd: postfix check
+  changed_when: false
+
+- name: Activer et démarrer Postfix
+  ansible.builtin.systemd_service:
+    name: postfix
+    enabled: true
+    state: started
+
+- name: Appliquer immédiatement les handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre l'ouverture du port SMTP
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 25
+    timeout: 30
+
+- name: Lire la configuration Postfix effective
+  ansible.builtin.command:
+    cmd: postconf -n
+  register: postfix_effective_config
+  changed_when: false
+
+- name: Afficher la configuration principale
+  ansible.builtin.debug:
+    msg:
+      - "Hostname : {{ postfix_myhostname }}"
+      - "Relayhost : [{{ postfix_relayhost }}]:{{ postfix_relayport }}"
+      - "Clients autorisés : {{ postfix_mynetworks | join(', ') }}"

@@ -1,0 +1,137 @@
+---
+- name: Vérifier la présence du secret Grafana
+  ansible.builtin.assert:
+    that:
+      - vault_grafana_admin_password is defined
+      - vault_grafana_admin_password | length >= 12
+      - vault_grafana_db_password is defined
+      - vault_grafana_db_password | length >= 24
+    fail_msg: "Le mot de passe Grafana doit être défini dans Ansible Vault."
+
+- name: Créer les répertoires de la stack monitoring
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ monitoring_stack_path }}"
+    - "{{ monitoring_stack_path }}/prometheus"
+    - "{{ monitoring_stack_path }}/prometheus/rules"
+    - "{{ monitoring_stack_path }}/alertmanager"
+    - "{{ monitoring_stack_path }}/grafana"
+    - "{{ monitoring_stack_path }}/grafana/provisioning"
+    - "{{ monitoring_stack_path }}/grafana/provisioning/datasources"
+    - "{{ monitoring_stack_path }}/grafana/provisioning/plugins"
+    - "{{ monitoring_stack_path }}/grafana/provisioning/alerting"
+    - "{{ monitoring_stack_path }}/grafana/provisioning/dashboards"
+
+- name: Vérifier le réseau partagé avec le reverse proxy
+  ansible.builtin.command:
+    cmd: docker network inspect edusmart_proxy
+  register: proxy_network
+  changed_when: false
+  failed_when: false
+
+- name: Créer le réseau partagé avec le reverse proxy
+  ansible.builtin.command:
+    cmd: docker network create edusmart_proxy
+  when: proxy_network.rc != 0
+
+- name: Déployer le fichier Compose
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ monitoring_stack_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la configuration Prometheus
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_stack_path }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer les règles Prometheus
+  ansible.builtin.template:
+    src: alerts.yml.j2
+    dest: "{{ monitoring_stack_path }}/prometheus/rules/alerts.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la configuration Alertmanager
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitoring_stack_path }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la source Prometheus de Grafana
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: "{{ monitoring_stack_path }}/grafana/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer les secrets Grafana
+  ansible.builtin.copy:
+    dest: "{{ monitoring_stack_path }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      GRAFANA_ADMIN_PASSWORD={{ vault_grafana_admin_password }}
+      GRAFANA_DB_PASSWORD={{ vault_grafana_db_password }}
+  no_log: true
+
+- name: Valider la configuration Compose
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml config --quiet
+    chdir: "{{ monitoring_stack_path }}"
+  changed_when: false
+
+- name: Démarrer la stack monitoring
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml up -d --remove-orphans
+    chdir: "{{ monitoring_stack_path }}"
+  register: monitoring_compose
+  changed_when: >
+    'Created' in monitoring_compose.stderr or
+    'Recreated' in monitoring_compose.stderr or
+    'Started' in monitoring_compose.stderr or
+    'Pulled' in monitoring_compose.stderr
+
+- name: Attendre Prometheus
+  ansible.builtin.uri:
+    url: "http://{{ monitoring_bind_ip }}:9090/-/ready"
+    status_code: 200
+  register: prometheus_health
+  retries: 20
+  delay: 3
+  until: prometheus_health.status == 200
+
+- name: Attendre Grafana
+  ansible.builtin.uri:
+    url: "http://{{ monitoring_bind_ip }}:3000/api/health"
+    status_code: 200
+  register: grafana_health
+  retries: 60
+  delay: 5
+  until: grafana_health.status == 200
+
+- name: Afficher les conteneurs de monitoring
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml ps
+    chdir: "{{ monitoring_stack_path }}"
+  register: monitoring_status
+  changed_when: false
+
+- name: Afficher l'état de la stack
+  ansible.builtin.debug:
+    var: monitoring_status.stdout_lines

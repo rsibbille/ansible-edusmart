@@ -1,0 +1,38 @@
+---
+name: edusmart-proxy
+
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:{{ npm_version }}
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+
+    environment:
+      TZ: Europe/Paris
+      DISABLE_IPV6: "true"
+
+    ports:
+      - "{{ npm_bind_ip }}:80:80"
+      - "{{ npm_bind_ip }}:81:81"
+      - "{{ npm_bind_ip }}:443:443"
+
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+
+    networks:
+      - edusmart_proxy
+
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/check-health
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+networks:
+  edusmart_proxy:
+    external: true
+    name: edusmart_proxy

@@ -1,0 +1,18 @@
+---
+- name: Harmoniser le nom du serveur Docker EduSmart
+  hosts: docker_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Définir le nom d'hôte attendu
+      ansible.builtin.hostname:
+        name: srv-prd-par-dkr-001
+
+    - name: Harmoniser la résolution locale du nom
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: '127.0.1.1 srv-prd-par-dkr-001.edusmart.lan srv-prd-par-dkr-001'
+        insertafter: '^127\.0\.0\.1'
+        state: present

@@ -1,0 +1,8 @@
+---
+- name: Durcir les accès SSH des serveurs Linux EduSmart
+  hosts: "{{ target_hosts | default('linux_servers') }}"
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: hardening_ssh

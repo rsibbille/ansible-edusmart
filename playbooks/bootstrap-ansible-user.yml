@@ -1,0 +1,44 @@
+---
+- name: Créer le compte technique Ansible EduSmart
+  hosts: "{{ target_hosts | default('ansible_controllers') }}"
+  become: true
+  gather_facts: false
+
+  vars:
+    ansible_service_user: svc_ansible
+    ansible_public_key: >-
+      {{ lookup(
+        'ansible.builtin.file',
+        lookup('ansible.builtin.env', 'HOME')
+        + '/.ssh/id_ed25519_ansible.pub'
+      ) }}
+
+  tasks:
+    - name: Créer le compte technique Ansible
+      ansible.builtin.user:
+        name: "{{ ansible_service_user }}"
+        comment: Compte technique Ansible EduSmart
+        shell: /bin/bash
+        create_home: true
+        groups:
+          - sudo
+        append: true
+        password_lock: true
+        state: present
+
+    - name: Déployer la clé publique Ansible
+      ansible.posix.authorized_key:
+        user: "{{ ansible_service_user }}"
+        key: "{{ ansible_public_key }}"
+        state: present
+        manage_dir: true
+
+    - name: Autoriser sudo sans mot de passe pour Ansible
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ ansible_service_user }}"
+        owner: root
+        group: root
+        mode: "0440"
+        content: |
+          {{ ansible_service_user }} ALL=(ALL:ALL) NOPASSWD: ALL
+        validate: "/usr/sbin/visudo -cf %s"

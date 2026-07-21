@@ -1,0 +1,22 @@
+---
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "10.10.20.24:25"
+  smtp_from: "monitoring@edusmart.lan"
+  smtp_require_tls: false
+
+route:
+  receiver: email-admin
+  group_by:
+    - alertname
+    - job
+    - instance
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: email-admin
+    email_configs:
+      - to: "w.laurent@edusmart.lan"
+        send_resolved: true

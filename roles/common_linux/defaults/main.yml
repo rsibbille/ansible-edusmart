@@ -1,0 +1,21 @@
+---
+common_timezone: Europe/Paris
+
+common_packages:
+  - ca-certificates
+  - chrony
+  - curl
+  - git
+  - htop
+  - logrotate
+  - qemu-guest-agent
+  - rsync
+  - rsyslog
+  - sudo
+  - unzip
+  - vim
+
+common_enable_qemu_guest_agent: true
+common_journal_max_use: 500M
+common_journal_retention: 30day
+common_enable_chrony: true

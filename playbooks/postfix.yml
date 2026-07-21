@@ -1,0 +1,8 @@
+---
+- name: Déployer le relais SMTP EduSmart
+  hosts: smtp_relays
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: postfix_relay

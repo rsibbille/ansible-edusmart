@@ -1,0 +1,44 @@
+---
+groups:
+  - name: edusmart-infrastructure
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cible Prometheus indisponible"
+          description: "{{ '{{' }} $labels.instance {{ '}}' }} ne répond plus depuis deux minutes."
+
+      - alert: HostHighCPU
+        expr: |
+          100 - (
+            avg by (instance) (
+              rate(node_cpu_seconds_total{mode="idle"}[5m])
+            ) * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Utilisation CPU élevée"
+          description: "Le CPU dépasse 85 % depuis dix minutes."
+
+      - alert: HostDiskSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{
+              fstype!~"tmpfs|overlay|squashfs"
+            }
+            /
+            node_filesystem_size_bytes{
+              fstype!~"tmpfs|overlay|squashfs"
+            }
+          ) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Espace disque faible"
+          description: "Moins de 15 % d'espace disque reste disponible."

@@ -1,0 +1,8 @@
+---
+- name: Déployer Nginx Proxy Manager EduSmart
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: nginx_proxy_manager

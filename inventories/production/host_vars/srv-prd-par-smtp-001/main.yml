@@ -1,0 +1,3 @@
+---
+common_enable_qemu_guest_agent: false
+common_enable_chrony: false

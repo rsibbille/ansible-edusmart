@@ -1,0 +1,25 @@
+---
+- name: Appliquer le durcissement SSH EduSmart
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    insertbefore: BOF
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - EDUSMART SSH"
+    backup: true
+    block: |
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      AuthenticationMethods publickey
+      PermitEmptyPasswords no
+      MaxAuthTries 3
+      LoginGraceTime 30
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding no
+      PermitTunnel no
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+      AllowUsers {{ ssh_allowed_users | join(' ') }}
+    validate: "/usr/sbin/sshd -t -f %s"
+  notify: Recharger SSH

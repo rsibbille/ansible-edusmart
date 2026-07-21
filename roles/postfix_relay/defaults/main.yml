@@ -1,0 +1,14 @@
+---
+postfix_myhostname: srv-prd-par-smtp-001.edusmart.lan
+postfix_mydomain: edusmart.lan
+
+postfix_relayhost: 10.10.20.11
+postfix_relayport: 25
+
+postfix_admin_recipient: w.laurent@edusmart.lan
+
+postfix_mynetworks:
+  - 127.0.0.0/8
+  - 10.10.50.11/32
+
+postfix_message_size_limit: 10485760

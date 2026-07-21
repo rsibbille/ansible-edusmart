@@ -1,0 +1,114 @@
+---
+- name: Vérifier que la cible utilise Debian
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Debian"
+      - ansible_architecture == "x86_64"
+    fail_msg: "Le rôle docker_host est actuellement prévu pour Debian amd64."
+
+- name: Installer les dépendances du dépôt Docker
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Supprimer les paquets Docker conflictuels
+  ansible.builtin.apt:
+    name: "{{ docker_conflicting_packages }}"
+    state: absent
+    purge: false
+
+- name: Ajouter le dépôt officiel Docker
+  ansible.builtin.deb822_repository:
+    name: docker
+    types:
+      - deb
+    uris:
+      - https://download.docker.com/linux/debian
+    suites:
+      - "{{ ansible_distribution_release }}"
+    components:
+      - stable
+    architectures:
+      - "{{ docker_apt_architecture }}"
+    signed_by: https://download.docker.com/linux/debian/gpg
+    state: present
+  register: docker_repository
+
+- name: Actualiser le cache APT après ajout du dépôt
+  ansible.builtin.apt:
+    update_cache: true
+  when: docker_repository.changed
+
+- name: Installer Docker Engine et Docker Compose
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+
+- name: Créer le répertoire de configuration Docker
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Déployer la configuration du démon Docker
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+    validate: "/usr/bin/python3 -m json.tool %s"
+  notify: Redémarrer Docker
+
+- name: Créer le répertoire des applications EduSmart
+  ansible.builtin.file:
+    path: /opt/edusmart/stacks
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Activer et démarrer containerd
+  ansible.builtin.systemd_service:
+    name: containerd
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Activer et démarrer Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Appliquer immédiatement les handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifier la version de Docker
+  ansible.builtin.command:
+    cmd: docker --version
+  register: docker_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Vérifier la version de Docker Compose
+  ansible.builtin.command:
+    cmd: docker compose version
+  register: docker_compose_version
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Afficher les versions installées
+  ansible.builtin.debug:
+    msg:
+      - "{{ docker_version.stdout }}"
+      - "{{ docker_compose_version.stdout }}"
+  when: not ansible_check_mode

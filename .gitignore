@@ -1,0 +1,17 @@
+# Sauvegardes et journaux
+*.backup-*
+*.bak-*
+*.retry
+*.log
+
+# Secrets locaux non chiffrés
+.vault_pass
+.vault-password
+vault-password*
+*.secret
+
+# Cache et fichiers temporaires Ansible
+*.pyc
+__pycache__/
+.ansible/
+facts/

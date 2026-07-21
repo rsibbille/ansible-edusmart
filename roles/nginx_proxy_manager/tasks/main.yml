@@ -1,0 +1,69 @@
+---
+- name: Créer les répertoires Nginx Proxy Manager
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ npm_stack_path }}"
+    - "{{ npm_stack_path }}/data"
+    - "{{ npm_stack_path }}/letsencrypt"
+
+- name: Vérifier le réseau Docker partagé
+  ansible.builtin.command:
+    cmd: docker network inspect edusmart_proxy
+  register: npm_proxy_network
+  changed_when: false
+  failed_when: false
+
+- name: Créer le réseau Docker partagé
+  ansible.builtin.command:
+    cmd: docker network create edusmart_proxy
+  when: npm_proxy_network.rc != 0
+
+- name: Déployer le fichier Compose Nginx Proxy Manager
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ npm_stack_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Valider la configuration Compose
+  ansible.builtin.command:
+    cmd: docker compose -f compose.yml config --quiet
+    chdir: "{{ npm_stack_path }}"
+  changed_when: false
+
+- name: Démarrer Nginx Proxy Manager
+  ansible.builtin.command:
+    cmd: docker compose -f compose.yml up -d --remove-orphans
+    chdir: "{{ npm_stack_path }}"
+  register: npm_compose
+  changed_when: >
+    'Created' in npm_compose.stderr or
+    'Recreated' in npm_compose.stderr or
+    'Started' in npm_compose.stderr or
+    'Pulled' in npm_compose.stderr
+
+- name: Attendre l'interface d'administration NPM
+  ansible.builtin.uri:
+    url: "http://{{ npm_bind_ip }}:81"
+    status_code: 200
+  register: npm_health
+  retries: 60
+  delay: 5
+  until: npm_health.status == 200
+
+- name: Afficher l'état du conteneur
+  ansible.builtin.command:
+    cmd: docker compose -f compose.yml ps
+    chdir: "{{ npm_stack_path }}"
+  register: npm_status
+  changed_when: false
+
+- name: Afficher le résultat
+  ansible.builtin.debug:
+    var: npm_status.stdout_lines
