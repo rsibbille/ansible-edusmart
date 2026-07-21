@@ -9,7 +9,7 @@ dns_secondary_hostname: srv-prd-par-idm-002
 dns_secondary_ip: 10.10.20.22
 
 # À incrémenter à chaque modification des zones.
-dns_zone_serial: 2026072101
+dns_zone_serial: 2026072102
 
 dns_forwarders:
   - 10.10.20.1
@@ -43,7 +43,7 @@ dns_records:
     address: 10.10.20.22
   - name: ldap
     address: 10.10.20.21
-  - name: ldap
+  - name: ldap-replica
     address: 10.10.20.22
   - name: mail
     address: 10.10.20.23
