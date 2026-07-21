@@ -1,0 +1,5 @@
+---
+- name: Redémarrer OpenLDAP
+  ansible.builtin.systemd_service:
+    name: slapd
+    state: restarted

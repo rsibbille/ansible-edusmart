@@ -1,0 +1,203 @@
+---
+- name: Vérifier que le rôle est exécuté sur le primaire
+  ansible.builtin.assert:
+    that:
+      - idm_role == "primary"
+    fail_msg: >-
+      Ce rôle d'initialisation doit d'abord être exécuté uniquement
+      sur le serveur LDAP primaire.
+
+- name: Vérifier les secrets OpenLDAP
+  ansible.builtin.assert:
+    that:
+      - vault_ldap_admin_password is defined
+      - vault_ldap_admin_password | length >= 20
+      - vault_ldap_sync_password is defined
+      - vault_ldap_sync_password | length >= 20
+    fail_msg: "Les secrets OpenLDAP sont absents ou trop courts."
+  no_log: true
+
+- name: Vérifier la présence des fichiers TLS
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ ldap_tls_private_key_path }}"
+    - "{{ ldap_tls_certificate_path }}"
+    - "{{ ldap_tls_ca_certificate_path }}"
+  register: ldap_tls_files
+
+- name: Refuser de continuer si un fichier TLS est absent
+  ansible.builtin.assert:
+    that:
+      - ldap_tls_files.results | map(attribute='stat.exists') | min
+    fail_msg: "Un ou plusieurs fichiers TLS LDAP sont absents."
+
+- name: Installer les outils Debconf
+  ansible.builtin.apt:
+    name: debconf-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Préconfigurer le domaine OpenLDAP
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/domain
+    value: "{{ ldap_domain }}"
+    vtype: string
+
+- name: Préconfigurer l'organisation OpenLDAP
+  ansible.builtin.debconf:
+    name: slapd
+    question: shared/organization
+    value: "{{ ldap_organization }}"
+    vtype: string
+
+- name: Demander la création de la configuration initiale
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/no_configuration
+    value: "false"
+    vtype: boolean
+
+- name: Conserver la base lors d'une désinstallation
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/purge_database
+    value: "false"
+    vtype: boolean
+
+- name: Préconfigurer le mot de passe administrateur
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/password1
+    value: "{{ vault_ldap_admin_password }}"
+    vtype: password
+  changed_when: false
+  no_log: true
+
+- name: Confirmer le mot de passe administrateur
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/password2
+    value: "{{ vault_ldap_admin_password }}"
+    vtype: password
+  changed_when: false
+  no_log: true
+
+- name: Installer OpenLDAP
+  ansible.builtin.apt:
+    name: "{{ openldap_packages }}"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Configurer les permissions du répertoire TLS
+  ansible.builtin.file:
+    path: "{{ ldap_tls_directory }}"
+    state: directory
+    owner: root
+    group: openldap
+    mode: "0750"
+
+- name: Autoriser OpenLDAP à lire sa clé privée
+  ansible.builtin.file:
+    path: "{{ ldap_tls_private_key_path }}"
+    owner: root
+    group: openldap
+    mode: "0640"
+  notify: Redémarrer OpenLDAP
+
+- name: Configurer les permissions des certificats
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: openldap
+    mode: "0644"
+  loop:
+    - "{{ ldap_tls_certificate_path }}"
+    - "{{ ldap_tls_ca_certificate_path }}"
+  notify: Redémarrer OpenLDAP
+
+- name: Activer et démarrer OpenLDAP
+  ansible.builtin.systemd_service:
+    name: slapd
+    enabled: true
+    state: started
+
+- name: Configurer les certificats dans cn=config
+  community.general.ldap_attrs:
+    dn: cn=config
+    attributes:
+      olcTLSCertificateFile: "{{ ldap_tls_certificate_path }}"
+      olcTLSCertificateKeyFile: "{{ ldap_tls_private_key_path }}"
+      olcTLSCACertificateFile: "{{ ldap_tls_ca_certificate_path }}"
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+  notify: Redémarrer OpenLDAP
+
+- name: Activer uniquement LDAPI et LDAPS
+  ansible.builtin.lineinfile:
+    path: /etc/default/slapd
+    regexp: '^SLAPD_SERVICES='
+    line: 'SLAPD_SERVICES="{{ ldap_slapd_services }}"'
+    backup: true
+  notify: Redémarrer OpenLDAP
+
+- name: Appliquer les changements OpenLDAP
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifier la configuration TLS dans cn=config
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -Y
+      - EXTERNAL
+      - -Q
+      - -H
+      - ldapi:///
+      - -LLL
+      - -b
+      - cn=config
+      - -s
+      - base
+      - olcTLSCertificateFile
+      - olcTLSCertificateKeyFile
+      - olcTLSCACertificateFile
+  changed_when: false
+
+- name: Vérifier le suffixe LDAP
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -Y
+      - EXTERNAL
+      - -Q
+      - -H
+      - ldapi:///
+      - -LLL
+      - -b
+      - cn=config
+      - "(olcSuffix={{ ldap_base_dn }})"
+      - olcSuffix
+      - olcRootDN
+  changed_when: false
+
+- name: Vérifier LDAPS avec validation du certificat
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -x
+      - -LLL
+      - -H
+      - "{{ ldap_primary_uri }}"
+      - -b
+      - ""
+      - -s
+      - base
+      - namingContexts
+  environment:
+    LDAPTLS_CACERT: "{{ ldap_tls_ca_certificate_path }}"
+    LDAPTLS_REQCERT: demand
+  changed_when: false

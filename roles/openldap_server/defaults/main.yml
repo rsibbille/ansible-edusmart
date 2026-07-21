@@ -1,0 +1,5 @@
+---
+openldap_packages:
+  - slapd
+  - ldap-utils
+  - python3-ldap

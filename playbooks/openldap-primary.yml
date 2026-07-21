@@ -1,0 +1,11 @@
+---
+- name: Installer le serveur OpenLDAP primaire EduSmart
+  hosts: idm_servers
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../inventories/production/vault/ldap.yml
+
+  roles:
+    - role: openldap_server
