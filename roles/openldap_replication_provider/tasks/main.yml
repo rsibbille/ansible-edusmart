@@ -1,0 +1,184 @@
+---
+- name: Vérifier que le serveur est le fournisseur LDAP
+  ansible.builtin.assert:
+    that:
+      - idm_role == "primary"
+      - ldap_database_dn is defined
+      - ldap_sync_dn is defined
+      - vault_ldap_admin_password is defined
+      - vault_ldap_sync_password is defined
+    fail_msg: "Les variables nécessaires à la réplication sont absentes."
+  no_log: true
+
+- name: Vérifier si le compte de réplication existe
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -x
+      - -LLL
+      - -H
+      - ldapi:///
+      - -D
+      - "{{ ldap_admin_dn }}"
+      - -w
+      - "{{ vault_ldap_admin_password }}"
+      - -b
+      - "{{ ldap_sync_dn }}"
+      - -s
+      - base
+      - dn
+  register: openldap_replicator_probe
+  changed_when: false
+  failed_when: openldap_replicator_probe.rc not in [0, 32]
+  no_log: true
+
+- name: Créer le compte de réplication
+  when: openldap_replicator_probe.rc == 32
+  block:
+    - name: Créer un fichier temporaire pour le secret
+      ansible.builtin.tempfile:
+        state: file
+        prefix: ldap-sync-
+      register: openldap_sync_password_file
+      no_log: true
+
+    - name: Écrire temporairement le secret de réplication
+      ansible.builtin.copy:
+        content: "{{ vault_ldap_sync_password }}"
+        dest: "{{ openldap_sync_password_file.path }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Générer le hash du mot de passe de réplication
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/slappasswd
+          - -T
+          - "{{ openldap_sync_password_file.path }}"
+      register: openldap_sync_password_hash
+      changed_when: false
+      no_log: true
+
+    - name: Ajouter le compte de réplication dans LDAP
+      community.general.ldap_entry:
+        dn: "{{ ldap_sync_dn }}"
+        objectClass:
+          - simpleSecurityObject
+          - organizationalRole
+        attributes:
+          description: Compte technique de réplication OpenLDAP
+          userPassword: "{{ openldap_sync_password_hash.stdout }}"
+        state: present
+        server_uri: ldapi:///
+        bind_dn: "{{ ldap_admin_dn }}"
+        bind_pw: "{{ vault_ldap_admin_password }}"
+      no_log: true
+
+  always:
+    - name: Supprimer le fichier temporaire du secret
+      ansible.builtin.file:
+        path: "{{ openldap_sync_password_file.path }}"
+        state: absent
+      when: openldap_sync_password_file is defined
+      no_log: true
+
+- name: Autoriser le compte de réplication à lire la base
+  community.general.ldap_attrs:
+    dn: "{{ ldap_database_dn }}"
+    attributes:
+      olcAccess:
+        - >-
+          to attrs=userPassword
+          by dn.exact="{{ ldap_sync_dn }}" read
+          by self write
+          by anonymous auth
+          by * none
+        - >-
+          to attrs=shadowLastChange
+          by self write
+          by * read
+        - >-
+          to *
+          by * read
+    ordered: true
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+
+- name: Charger le module syncprov
+  community.general.ldap_attrs:
+    dn: cn=module{0},cn=config
+    attributes:
+      olcModuleLoad:
+        - syncprov
+    state: present
+    server_uri: ldapi:///
+    sasl_class: external
+
+- name: Créer l'overlay syncprov
+  community.general.ldap_entry:
+    dn: "olcOverlay=syncprov,{{ ldap_database_dn }}"
+    objectClass:
+      - olcOverlayConfig
+      - olcSyncProvConfig
+    attributes:
+      olcOverlay: syncprov
+      olcSpCheckpoint: "{{ openldap_syncprov_checkpoint }}"
+      olcSpSessionlog: "{{ openldap_syncprov_sessionlog }}"
+    state: present
+    server_uri: ldapi:///
+    sasl_class: external
+    xorder_discovery: auto
+
+- name: Configurer les paramètres syncprov
+  community.general.ldap_attrs:
+    dn: "olcOverlay=syncprov,{{ ldap_database_dn }}"
+    attributes:
+      olcSpCheckpoint: "{{ openldap_syncprov_checkpoint }}"
+      olcSpSessionlog: "{{ openldap_syncprov_sessionlog }}"
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+    xorder_discovery: auto
+
+- name: Vérifier l'authentification du compte de réplication
+  ansible.builtin.command:
+    argv:
+      - ldapwhoami
+      - -x
+      - -H
+      - "{{ ldap_primary_uri }}"
+      - -D
+      - "{{ ldap_sync_dn }}"
+      - -w
+      - "{{ vault_ldap_sync_password }}"
+  environment:
+    LDAPTLS_CACERT: "{{ ldap_tls_ca_certificate_path }}"
+    LDAPTLS_REQCERT: demand
+  changed_when: false
+  no_log: true
+
+- name: Vérifier que le compte peut lire les mots de passe répliqués
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -x
+      - -LLL
+      - -H
+      - "{{ ldap_primary_uri }}"
+      - -D
+      - "{{ ldap_sync_dn }}"
+      - -w
+      - "{{ vault_ldap_sync_password }}"
+      - -b
+      - "{{ ldap_sync_dn }}"
+      - -s
+      - base
+      - userPassword
+  environment:
+    LDAPTLS_CACERT: "{{ ldap_tls_ca_certificate_path }}"
+    LDAPTLS_REQCERT: demand
+  changed_when: false
+  no_log: true

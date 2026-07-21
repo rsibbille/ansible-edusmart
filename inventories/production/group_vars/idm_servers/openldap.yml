@@ -13,3 +13,12 @@ ldap_tls_ca_certificate_path: /etc/ldap/tls/edusmart-root-ca.crt
 ldap_slapd_services: "ldapi:/// ldaps:///"
 
 ldap_primary_uri: ldaps://ldap.edusmart.lan
+
+# Réplication OpenLDAP
+ldap_database_dn: "olcDatabase={1}mdb,cn=config"
+ldap_sync_dn: "cn=replicator,dc=edusmart,dc=lan"
+ldap_sync_cn: replicator
+
+ldap_provider_uri: ldaps://srv-prd-par-idm-001.edusmart.lan
+ldap_replica_uri: ldaps://srv-prd-par-idm-002.edusmart.lan
+ldap_replica_rid: "001"

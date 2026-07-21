@@ -1,0 +1,8 @@
+---
+openldap_consumer_packages:
+  - slapd
+  - ldap-utils
+  - python3-ldap
+  - debconf-utils
+
+openldap_replica_retry: "5 5 300 +"

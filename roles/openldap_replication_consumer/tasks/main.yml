@@ -1,0 +1,298 @@
+---
+- name: Vérifier les variables de la réplique
+  ansible.builtin.assert:
+    that:
+      - idm_role == "replica"
+      - ldap_database_dn is defined
+      - ldap_provider_uri is defined
+      - ldap_replica_uri is defined
+      - ldap_sync_dn is defined
+      - vault_ldap_admin_password is defined
+      - vault_ldap_sync_password is defined
+      - not (vault_ldap_sync_password | regex_search('\s'))
+    fail_msg: >-
+      Les variables de réplication sont absentes ou le mot de passe
+      de réplication contient un espace.
+  no_log: true
+
+- name: Vérifier les fichiers TLS
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ ldap_tls_private_key_path }}"
+    - "{{ ldap_tls_certificate_path }}"
+    - "{{ ldap_tls_ca_certificate_path }}"
+  register: openldap_replica_tls_files
+
+- name: Refuser de continuer si TLS est incomplet
+  ansible.builtin.assert:
+    that:
+      - openldap_replica_tls_files.results
+        | map(attribute='stat.exists')
+        | min
+    fail_msg: "Les fichiers TLS de la réplique sont absents."
+
+- name: Installer les outils Debconf
+  ansible.builtin.apt:
+    name: debconf-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Préconfigurer le domaine LDAP
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/domain
+    value: "{{ ldap_domain }}"
+    vtype: string
+
+- name: Préconfigurer l'organisation LDAP
+  ansible.builtin.debconf:
+    name: slapd
+    question: shared/organization
+    value: "{{ ldap_organization }}"
+    vtype: string
+
+- name: Demander la création initiale de la base
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/no_configuration
+    value: "false"
+    vtype: boolean
+
+- name: Préconfigurer le mot de passe administrateur
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/password1
+    value: "{{ vault_ldap_admin_password }}"
+    vtype: password
+  changed_when: false
+  no_log: true
+
+- name: Confirmer le mot de passe administrateur
+  ansible.builtin.debconf:
+    name: slapd
+    question: slapd/password2
+    value: "{{ vault_ldap_admin_password }}"
+    vtype: password
+  changed_when: false
+  no_log: true
+
+- name: Installer OpenLDAP sur la réplique
+  ansible.builtin.apt:
+    name: "{{ openldap_consumer_packages }}"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Configurer le répertoire TLS
+  ansible.builtin.file:
+    path: "{{ ldap_tls_directory }}"
+    state: directory
+    owner: root
+    group: openldap
+    mode: "0750"
+
+- name: Autoriser OpenLDAP à lire la clé privée
+  ansible.builtin.file:
+    path: "{{ ldap_tls_private_key_path }}"
+    owner: root
+    group: openldap
+    mode: "0640"
+  notify: Redémarrer OpenLDAP
+
+- name: Configurer les certificats publics
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: openldap
+    mode: "0644"
+  loop:
+    - "{{ ldap_tls_certificate_path }}"
+    - "{{ ldap_tls_ca_certificate_path }}"
+  notify: Redémarrer OpenLDAP
+
+- name: Activer OpenLDAP
+  ansible.builtin.systemd_service:
+    name: slapd
+    enabled: true
+    state: started
+
+- name: Configurer TLS dans cn=config
+  community.general.ldap_attrs:
+    dn: cn=config
+    attributes:
+      olcTLSCertificateFile: "{{ ldap_tls_certificate_path }}"
+      olcTLSCertificateKeyFile: "{{ ldap_tls_private_key_path }}"
+      olcTLSCACertificateFile: "{{ ldap_tls_ca_certificate_path }}"
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+  notify: Redémarrer OpenLDAP
+
+- name: Activer uniquement LDAPI et LDAPS
+  ansible.builtin.lineinfile:
+    path: /etc/default/slapd
+    regexp: '^SLAPD_SERVICES='
+    line: 'SLAPD_SERVICES="{{ ldap_slapd_services }}"'
+    backup: true
+  notify: Redémarrer OpenLDAP
+
+- name: Appliquer la configuration TLS
+  ansible.builtin.meta: flush_handlers
+
+- name: Rechercher une configuration syncrepl existante
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -Y
+      - EXTERNAL
+      - -Q
+      - -H
+      - ldapi:///
+      - -LLL
+      - -b
+      - "{{ ldap_database_dn }}"
+      - -s
+      - base
+      - olcSyncrepl
+  register: openldap_existing_syncrepl
+  changed_when: false
+
+- name: Préparer le mot de passe administrateur temporaire
+  ansible.builtin.tempfile:
+    state: file
+    prefix: ldap-admin-
+  register: openldap_admin_password_file
+  when: "'olcSyncrepl:' not in openldap_existing_syncrepl.stdout"
+  no_log: true
+
+- name: Écrire le mot de passe administrateur temporaire
+  ansible.builtin.copy:
+    content: "{{ vault_ldap_admin_password }}"
+    dest: "{{ openldap_admin_password_file.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: "'olcSyncrepl:' not in openldap_existing_syncrepl.stdout"
+  no_log: true
+
+- name: Supprimer la base locale initiale avant réplication
+  ansible.builtin.command:
+    argv:
+      - ldapdelete
+      - -r
+      - -x
+      - -H
+      - ldapi:///
+      - -D
+      - "{{ ldap_admin_dn }}"
+      - -y
+      - "{{ openldap_admin_password_file.path }}"
+      - "{{ ldap_base_dn }}"
+  register: openldap_initial_database_delete
+  changed_when: openldap_initial_database_delete.rc == 0
+  failed_when: openldap_initial_database_delete.rc not in [0, 32]
+  when: "'olcSyncrepl:' not in openldap_existing_syncrepl.stdout"
+  no_log: true
+
+- name: Supprimer le fichier temporaire
+  ansible.builtin.file:
+    path: "{{ openldap_admin_password_file.path }}"
+    state: absent
+  when: openldap_admin_password_file is defined
+  no_log: true
+
+- name: Configurer les ACL de la réplique
+  community.general.ldap_attrs:
+    dn: "{{ ldap_database_dn }}"
+    attributes:
+      olcAccess:
+        - >-
+          to attrs=userPassword
+          by dn.exact="{{ ldap_sync_dn }}" read
+          by self write
+          by anonymous auth
+          by * none
+        - >-
+          to attrs=shadowLastChange
+          by self write
+          by * read
+        - >-
+          to *
+          by * read
+    ordered: true
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+
+- name: Ajouter les index utiles à syncrepl
+  community.general.ldap_attrs:
+    dn: "{{ ldap_database_dn }}"
+    attributes:
+      olcDbIndex:
+        - entryUUID eq
+        - entryCSN eq
+    state: present
+    server_uri: ldapi:///
+    sasl_class: external
+
+- name: Construire la configuration syncrepl
+  ansible.builtin.set_fact:
+    openldap_syncrepl_definition: >-
+      rid={{ ldap_replica_rid }}
+      provider={{ ldap_provider_uri }}
+      bindmethod=simple
+      binddn="{{ ldap_sync_dn }}"
+      credentials={{ vault_ldap_sync_password }}
+      searchbase="{{ ldap_base_dn }}"
+      type=refreshAndPersist
+      retry="{{ openldap_replica_retry }}"
+      schemachecking=on
+      tls_reqcert=demand
+      tls_cacert={{ ldap_tls_ca_certificate_path }}
+  no_log: true
+
+- name: Configurer syncrepl
+  community.general.ldap_attrs:
+    dn: "{{ ldap_database_dn }}"
+    attributes:
+      olcSyncrepl:
+        - "{{ openldap_syncrepl_definition }}"
+    ordered: true
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+  no_log: true
+
+- name: Configurer la réplique en lecture seule
+  community.general.ldap_attrs:
+    dn: "{{ ldap_database_dn }}"
+    attributes:
+      olcReadOnly: "TRUE"
+      olcUpdateRef: "{{ ldap_provider_uri }}"
+    state: exact
+    server_uri: ldapi:///
+    sasl_class: external
+
+- name: Attendre la réplication du compte technique
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -x
+      - -LLL
+      - -H
+      - "{{ ldap_replica_uri }}"
+      - -b
+      - "{{ ldap_sync_dn }}"
+      - -s
+      - base
+      - dn
+  environment:
+    LDAPTLS_CACERT: "{{ ldap_tls_ca_certificate_path }}"
+    LDAPTLS_REQCERT: demand
+  register: openldap_replication_test
+  changed_when: false
+  retries: 12
+  delay: 5
+  until: openldap_replication_test.rc == 0

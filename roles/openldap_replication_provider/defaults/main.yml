@@ -1,0 +1,3 @@
+---
+openldap_syncprov_checkpoint: "100 10"
+openldap_syncprov_sessionlog: "100"
