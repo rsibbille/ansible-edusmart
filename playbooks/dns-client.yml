@@ -1,0 +1,9 @@
+---
+- name: Configurer les résolveurs DNS EduSmart
+  hosts: idm_servers:mail_servers
+  serial: 1
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: dns_client

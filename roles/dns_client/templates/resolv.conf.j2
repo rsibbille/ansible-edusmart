@@ -1,0 +1,8 @@
+# Fichier administré par Ansible
+search {{ dns_client_search_domain }}
+
+{% for nameserver in dns_client_nameservers %}
+nameserver {{ nameserver }}
+{% endfor %}
+
+options {{ dns_client_options | join(' ') }}

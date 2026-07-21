@@ -1,0 +1,54 @@
+---
+- name: Vérifier que les serveurs DNS sont définis
+  ansible.builtin.assert:
+    that:
+      - dns_client_nameservers is defined
+      - dns_client_nameservers | length >= 1
+    fail_msg: "La variable dns_client_nameservers doit être définie."
+
+- name: Installer les outils DNS
+  ansible.builtin.apt:
+    name:
+      - dnsutils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Vérifier les serveurs DNS avant bascule
+  ansible.builtin.command:
+    cmd: >-
+      dig @{{ item }}
+      edusmart.lan SOA
+      +short +time=2 +tries=1
+  loop: "{{ dns_client_nameservers }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Vérifier la présence de la sauvegarde resolv.conf
+  ansible.builtin.stat:
+    path: /etc/resolv.conf.pre-ansible
+  register: dns_resolv_backup
+
+- name: Sauvegarder la configuration DNS initiale
+  ansible.builtin.copy:
+    src: /etc/resolv.conf
+    dest: /etc/resolv.conf.pre-ansible
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: not dns_resolv_backup.stat.exists
+
+- name: Configurer les résolveurs DNS
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Vérifier la résolution DNS finale
+  ansible.builtin.command:
+    cmd: getent hosts srv-prd-par-idm-001.edusmart.lan
+  changed_when: false
+  when: not ansible_check_mode

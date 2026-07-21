@@ -1,0 +1,5 @@
+---
+dns_client_search_domain: edusmart.lan
+dns_client_options:
+  - timeout:2
+  - attempts:2
