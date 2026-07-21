@@ -1,0 +1,8 @@
+---
+- name: Intégrer les clients Linux Mint à OpenLDAP
+  hosts: linux_clients
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: sssd_ldap_client

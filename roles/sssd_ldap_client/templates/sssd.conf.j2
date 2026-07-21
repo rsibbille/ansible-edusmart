@@ -1,0 +1,44 @@
+[sssd]
+config_file_version = 2
+services = nss, pam
+domains = {{ sssd_domain }}
+
+[nss]
+
+[pam]
+
+[domain/{{ sssd_domain }}]
+id_provider = ldap
+auth_provider = ldap
+access_provider = simple
+
+simple_allow_groups = {{ sssd_allowed_group }}
+
+ldap_uri = {{ sssd_ldap_uris | join(', ') }}
+ldap_search_base = {{ sssd_ldap_search_base }}
+ldap_user_search_base = {{ sssd_ldap_user_search_base }}
+ldap_group_search_base = {{ sssd_ldap_group_search_base }}
+
+ldap_schema = rfc2307
+
+ldap_user_object_class = posixAccount
+ldap_user_name = uid
+ldap_user_uid_number = uidNumber
+ldap_user_gid_number = gidNumber
+ldap_user_home_directory = homeDirectory
+ldap_user_shell = loginShell
+
+ldap_group_object_class = posixGroup
+ldap_group_name = cn
+ldap_group_gid_number = gidNumber
+ldap_group_member = memberUid
+
+ldap_tls_reqcert = demand
+ldap_tls_cacert = /etc/ssl/certs/ca-certificates.crt
+
+cache_credentials = true
+enumerate = false
+use_fully_qualified_names = false
+
+fallback_homedir = /home/%u
+default_shell = /bin/bash

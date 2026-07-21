@@ -1,0 +1,12 @@
+---
+sssd_packages:
+  - ca-certificates
+  - ldap-utils
+  - sssd
+  - sssd-ldap
+  - sssd-tools
+  - libnss-sss
+  - libpam-sss
+
+sssd_local_ca_path: "{{ playbook_dir }}/../.pki/ca/edusmart-root-ca.crt"
+sssd_remote_ca_path: /usr/local/share/ca-certificates/edusmart-root-ca.crt

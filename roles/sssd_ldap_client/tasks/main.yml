@@ -1,0 +1,193 @@
+---
+- name: Vérifier les variables SSSD
+  ansible.builtin.assert:
+    that:
+      - sssd_domain is defined
+      - sssd_ldap_uris | length >= 2
+      - sssd_ldap_hosts | length >= 2
+      - sssd_ldap_search_base is defined
+      - sssd_allowed_group is defined
+      - sssd_test_user is defined
+    fail_msg: "Les variables du client SSSD sont incomplètes."
+
+- name: Vérifier la CA EduSmart sur le contrôleur
+  ansible.builtin.stat:
+    path: "{{ sssd_local_ca_path }}"
+  delegate_to: localhost
+  become: false
+  register: sssd_ca_source
+
+- name: Refuser de continuer si la CA est absente
+  ansible.builtin.assert:
+    that:
+      - sssd_ca_source.stat.exists
+    fail_msg: "La CA EduSmart est absente du contrôleur Ansible."
+
+- name: Vérifier les ports LDAPS
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 636
+    connect_timeout: 3
+    timeout: 5
+    state: started
+  loop: "{{ sssd_ldap_hosts }}"
+
+- name: Installer les composants SSSD
+  ansible.builtin.apt:
+    name: "{{ sssd_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installer la CA EduSmart
+  ansible.builtin.copy:
+    src: "{{ sssd_local_ca_path }}"
+    dest: "{{ sssd_remote_ca_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: sssd_ca_installation
+
+- name: Actualiser les autorités de certification
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  when: sssd_ca_installation.changed
+
+- name: Vérifier LDAPS avec la CA système
+  ansible.builtin.command:
+    argv:
+      - ldapsearch
+      - -x
+      - -LLL
+      - -H
+      - "{{ item }}"
+      - -b
+      - ""
+      - -s
+      - base
+      - namingContexts
+  loop: "{{ sssd_ldap_uris }}"
+  environment:
+    LDAPTLS_CACERT: /etc/ssl/certs/ca-certificates.crt
+    LDAPTLS_REQCERT: demand
+  changed_when: false
+
+- name: Déployer la configuration SSSD
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    owner: root
+    group: root
+    mode: "0600"
+  register: sssd_configuration
+  notify: Redémarrer SSSD
+
+- name: Vérifier la syntaxe SSSD
+  ansible.builtin.command:
+    cmd: sssctl config-check
+  changed_when: false
+
+- name: Activer SSSD dans NSS
+  ansible.builtin.replace:
+    path: /etc/nsswitch.conf
+    regexp: '^({{ item }}:\s+)(?!.*\bsss\b)(.*)$'
+    replace: '\1\2 sss'
+  loop:
+    - passwd
+    - group
+    - shadow
+
+- name: Vérifier si mkhomedir est déjà activé
+  ansible.builtin.command:
+    cmd: grep -Eq '^[^#].*pam_mkhomedir\.so' /etc/pam.d/common-session
+  register: sssd_mkhomedir_status
+  changed_when: false
+  failed_when: false
+
+- name: Activer la création automatique du répertoire personnel
+  ansible.builtin.command:
+    cmd: pam-auth-update --package --enable mkhomedir
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: sssd_mkhomedir_status.rc != 0
+
+- name: Vider le cache après modification de la configuration
+  ansible.builtin.command:
+    cmd: sss_cache -E
+  when: sssd_configuration.changed
+  changed_when: true
+
+- name: Appliquer les changements SSSD
+  ansible.builtin.meta: flush_handlers
+
+- name: Activer et démarrer SSSD
+  ansible.builtin.systemd_service:
+    name: sssd
+    enabled: true
+    state: started
+
+- name: Vérifier que l'utilisateur LDAP est visible
+  ansible.builtin.command:
+    argv:
+      - getent
+      - passwd
+      - "{{ sssd_test_user }}"
+  register: sssd_user_result
+  changed_when: false
+
+- name: Vérifier que le groupe LDAP est visible
+  ansible.builtin.command:
+    argv:
+      - getent
+      - group
+      - "{{ sssd_allowed_group }}"
+  register: sssd_group_result
+  changed_when: false
+
+- name: Afficher les identités LDAP détectées
+  ansible.builtin.debug:
+    msg:
+      - "{{ sssd_user_result.stdout }}"
+      - "{{ sssd_group_result.stdout }}"
+
+- name: Créer le répertoire de configuration LightDM
+  ansible.builtin.file:
+    path: /etc/lightdm/lightdm.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Autoriser la connexion graphique manuelle LDAP
+  ansible.builtin.template:
+    src: 60-edusmart-ldap.conf.j2
+    dest: /etc/lightdm/lightdm.conf.d/60-edusmart-ldap.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Masquer le compte technique svc_ansible du greeter
+  ansible.builtin.copy:
+    content: |
+      [User]
+      SystemAccount=true
+    dest: /var/lib/AccountsService/users/svc_ansible
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Créer le répertoire de configuration OpenLDAP
+  ansible.builtin.file:
+    path: /etc/ldap
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configurer les outils clients OpenLDAP
+  ansible.builtin.template:
+    src: ldap.conf.j2
+    dest: /etc/ldap/ldap.conf
+    owner: root
+    group: root
+    mode: "0644"

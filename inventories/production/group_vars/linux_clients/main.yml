@@ -1,0 +1,17 @@
+---
+sssd_domain: edusmart.lan
+
+sssd_ldap_hosts:
+  - ldap.edusmart.lan
+  - ldap-replica.edusmart.lan
+
+sssd_ldap_uris:
+  - ldaps://ldap.edusmart.lan
+  - ldaps://ldap-replica.edusmart.lan
+
+sssd_ldap_search_base: dc=edusmart,dc=lan
+sssd_ldap_user_search_base: ou=People,dc=edusmart,dc=lan
+sssd_ldap_group_search_base: ou=Groups,dc=edusmart,dc=lan
+
+sssd_allowed_group: ldap-users
+sssd_test_user: testldap
