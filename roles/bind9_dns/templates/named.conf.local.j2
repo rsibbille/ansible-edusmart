@@ -1,0 +1,45 @@
+zone "{{ dns_domain }}" {
+{% if idm_role == "primary" %}
+    type primary;
+    file "/etc/bind/zones/db.{{ dns_domain }}";
+    allow-transfer {
+        {{ dns_secondary_ip }};
+    };
+    also-notify {
+        {{ dns_secondary_ip }};
+    };
+    notify yes;
+{% elif idm_role == "replica" %}
+    type secondary;
+    primaries {
+        {{ dns_primary_ip }};
+    };
+    file "/var/cache/bind/db.{{ dns_domain }}";
+    allow-notify {
+        {{ dns_primary_ip }};
+    };
+{% endif %}
+};
+
+zone "{{ dns_reverse_zone }}" {
+{% if idm_role == "primary" %}
+    type primary;
+    file "/etc/bind/zones/db.10.10.20";
+    allow-transfer {
+        {{ dns_secondary_ip }};
+    };
+    also-notify {
+        {{ dns_secondary_ip }};
+    };
+    notify yes;
+{% elif idm_role == "replica" %}
+    type secondary;
+    primaries {
+        {{ dns_primary_ip }};
+    };
+    file "/var/cache/bind/db.10.10.20";
+    allow-notify {
+        {{ dns_primary_ip }};
+    };
+{% endif %}
+};

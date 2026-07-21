@@ -1,0 +1,6 @@
+---
+- name: Redémarrer BIND9
+  ansible.builtin.systemd_service:
+    name: "{{ bind9_service_name }}"
+    state: restarted
+  when: not ansible_check_mode

@@ -1,0 +1,52 @@
+acl "edusmart_clients" {
+{% for network in dns_allowed_networks %}
+    {{ network }};
+{% endfor %}
+};
+
+options {
+    directory "/var/cache/bind";
+
+    listen-on port 53 {
+        127.0.0.1;
+        {{ ansible_host }};
+    };
+
+    listen-on-v6 {
+        none;
+    };
+
+    recursion yes;
+
+    allow-query {
+        localhost;
+        edusmart_clients;
+    };
+
+    allow-recursion {
+        localhost;
+        edusmart_clients;
+    };
+
+    allow-query-cache {
+        localhost;
+        edusmart_clients;
+    };
+
+    # Les transferts sont autorisés uniquement par zone.
+    allow-transfer {
+        none;
+    };
+
+    forward only;
+
+    forwarders {
+{% for forwarder in dns_forwarders %}
+        {{ forwarder }};
+{% endfor %}
+    };
+
+    dnssec-validation auto;
+    minimal-responses yes;
+    version "not disclosed";
+};

@@ -1,0 +1,61 @@
+---
+dns_domain: edusmart.lan
+dns_reverse_zone: 20.10.10.in-addr.arpa
+
+dns_primary_hostname: srv-prd-par-idm-001
+dns_primary_ip: 10.10.20.21
+
+dns_secondary_hostname: srv-prd-par-idm-002
+dns_secondary_ip: 10.10.20.22
+
+# À incrémenter à chaque modification des zones.
+dns_zone_serial: 2026072101
+
+dns_forwarders:
+  - 10.10.20.1
+
+dns_allowed_networks:
+  - 10.10.0.0/24
+  - 10.10.20.0/24
+  - 10.10.30.0/24
+  - 10.10.50.0/24
+  - 10.10.70.0/24
+  - 100.64.0.0/10
+
+dns_records:
+  - name: srv-prd-par-idm-001
+    address: 10.10.20.21
+  - name: srv-prd-par-idm-002
+    address: 10.10.20.22
+  - name: srv-prd-par-mail-001
+    address: 10.10.20.23
+  - name: srv-prd-par-smtp-001
+    address: 10.10.20.24
+  - name: srv-prd-par-ans-001
+    address: 10.10.30.20
+  - name: srv-prd-par-bas-001
+    address: 10.10.30.11
+  - name: srv-prd-par-dkr-001
+    address: 10.10.50.11
+  - name: ns1
+    address: 10.10.20.21
+  - name: ns2
+    address: 10.10.20.22
+  - name: ldap
+    address: 10.10.20.21
+  - name: ldap
+    address: 10.10.20.22
+  - name: mail
+    address: 10.10.20.23
+  - name: smtp
+    address: 10.10.20.24
+
+dns_reverse_records:
+  - last_octet: 21
+    hostname: srv-prd-par-idm-001
+  - last_octet: 22
+    hostname: srv-prd-par-idm-002
+  - last_octet: 23
+    hostname: srv-prd-par-mail-001
+  - last_octet: 24
+    hostname: srv-prd-par-smtp-001

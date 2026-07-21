@@ -1,0 +1,7 @@
+---
+bind9_packages:
+  - bind9
+  - bind9-utils
+  - dnsutils
+
+bind9_service_name: named
