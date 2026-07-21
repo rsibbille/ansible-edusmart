@@ -1,0 +1,160 @@
+---
+- name: Vérifier les variables de l'annuaire
+  ansible.builtin.assert:
+    that:
+      - idm_role == "primary"
+      - ldap_people_dn is defined
+      - ldap_groups_dn is defined
+      - ldap_users_group is defined
+      - ldap_test_user is defined
+      - vault_ldap_admin_password is defined
+      - vault_ldap_test_user_password is defined
+      - vault_ldap_test_user_password | length >= 12
+    fail_msg: "Les variables nécessaires à l'annuaire LDAP sont absentes."
+  no_log: true
+
+- name: Créer l'unité organisationnelle People
+  community.general.ldap_entry:
+    dn: "{{ ldap_people_dn }}"
+    objectClass:
+      - top
+      - organizationalUnit
+    attributes:
+      ou: People
+    state: present
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Créer l'unité organisationnelle Groups
+  community.general.ldap_entry:
+    dn: "{{ ldap_groups_dn }}"
+    objectClass:
+      - top
+      - organizationalUnit
+    attributes:
+      ou: Groups
+    state: present
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Créer le groupe POSIX ldap-users
+  community.general.ldap_entry:
+    dn: "{{ ldap_users_group.dn }}"
+    objectClass:
+      - top
+      - posixGroup
+    attributes:
+      cn: "{{ ldap_users_group.cn }}"
+      gidNumber: "{{ ldap_users_group.gid_number }}"
+    state: present
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Maintenir les attributs du groupe POSIX
+  community.general.ldap_attrs:
+    dn: "{{ ldap_users_group.dn }}"
+    attributes:
+      cn: "{{ ldap_users_group.cn }}"
+      gidNumber: "{{ ldap_users_group.gid_number }}"
+    state: exact
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Ajouter l'utilisateur au groupe POSIX
+  community.general.ldap_attrs:
+    dn: "{{ ldap_users_group.dn }}"
+    attributes:
+      memberUid:
+        - "{{ ldap_test_user.uid }}"
+    state: present
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Créer le premier utilisateur POSIX
+  community.general.ldap_entry:
+    dn: "{{ ldap_test_user.dn }}"
+    objectClass:
+      - top
+      - inetOrgPerson
+      - posixAccount
+      - shadowAccount
+    attributes:
+      uid: "{{ ldap_test_user.uid }}"
+      cn: "{{ ldap_test_user.common_name }}"
+      sn: "{{ ldap_test_user.surname }}"
+      givenName: "{{ ldap_test_user.given_name }}"
+      displayName: "{{ ldap_test_user.display_name }}"
+      uidNumber: "{{ ldap_test_user.uid_number }}"
+      gidNumber: "{{ ldap_test_user.gid_number }}"
+      homeDirectory: "{{ ldap_test_user.home_directory }}"
+      loginShell: "{{ ldap_test_user.login_shell }}"
+      mail: "{{ ldap_test_user.mail }}"
+      gecos: "{{ ldap_test_user.display_name }}"
+    state: present
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Maintenir les attributs du premier utilisateur
+  community.general.ldap_attrs:
+    dn: "{{ ldap_test_user.dn }}"
+    attributes:
+      uid: "{{ ldap_test_user.uid }}"
+      cn: "{{ ldap_test_user.common_name }}"
+      sn: "{{ ldap_test_user.surname }}"
+      givenName: "{{ ldap_test_user.given_name }}"
+      displayName: "{{ ldap_test_user.display_name }}"
+      uidNumber: "{{ ldap_test_user.uid_number }}"
+      gidNumber: "{{ ldap_test_user.gid_number }}"
+      homeDirectory: "{{ ldap_test_user.home_directory }}"
+      loginShell: "{{ ldap_test_user.login_shell }}"
+      mail: "{{ ldap_test_user.mail }}"
+      gecos: "{{ ldap_test_user.display_name }}"
+    state: exact
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Configurer le mot de passe de l'utilisateur
+  community.general.ldap_passwd:
+    dn: "{{ ldap_test_user.dn }}"
+    passwd: "{{ vault_ldap_test_user_password }}"
+    server_uri: ldapi:///
+    bind_dn: "{{ ldap_admin_dn }}"
+    bind_pw: "{{ vault_ldap_admin_password }}"
+  no_log: true
+
+- name: Attendre la réplication et vérifier l'authentification sur IDM2
+  community.general.ldap_search:
+    dn: "{{ ldap_test_user.dn }}"
+    scope: base
+    attrs:
+      - uid
+      - uidNumber
+      - gidNumber
+      - homeDirectory
+      - loginShell
+      - mail
+    server_uri: "{{ ldap_replica_uri }}"
+    bind_dn: "{{ ldap_test_user.dn }}"
+    bind_pw: "{{ vault_ldap_test_user_password }}"
+    ca_path: "{{ ldap_tls_ca_certificate_path }}"
+    validate_certs: true
+  delegate_to: srv-prd-par-idm-002
+  register: ldap_replica_user_test
+  retries: 12
+  delay: 5
+  until: ldap_replica_user_test is succeeded
+  no_log: true

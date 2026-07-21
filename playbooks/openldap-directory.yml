@@ -1,0 +1,11 @@
+---
+- name: Initialiser l'annuaire LDAP EduSmart
+  hosts: srv-prd-par-idm-001
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../inventories/production/vault/ldap.yml
+
+  roles:
+    - role: openldap_directory

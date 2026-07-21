@@ -22,3 +22,25 @@ ldap_sync_cn: replicator
 ldap_provider_uri: ldaps://srv-prd-par-idm-001.edusmart.lan
 ldap_replica_uri: ldaps://srv-prd-par-idm-002.edusmart.lan
 ldap_replica_rid: "001"
+
+# Arborescence LDAP POSIX
+ldap_people_dn: "ou=People,dc=edusmart,dc=lan"
+ldap_groups_dn: "ou=Groups,dc=edusmart,dc=lan"
+
+ldap_users_group:
+  cn: ldap-users
+  dn: "cn=ldap-users,ou=Groups,dc=edusmart,dc=lan"
+  gid_number: "20000"
+
+ldap_test_user:
+  uid: testldap
+  dn: "uid=testldap,ou=People,dc=edusmart,dc=lan"
+  given_name: Utilisateur
+  surname: Test
+  common_name: Utilisateur Test
+  display_name: Utilisateur Test
+  uid_number: "20001"
+  gid_number: "20000"
+  home_directory: /home/testldap
+  login_shell: /bin/bash
+  mail: testldap@edusmart.lan
