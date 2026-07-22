@@ -1,0 +1,9 @@
+# Configuration gérée par Ansible - EduSmart
+
+mail_location = maildir:{{ mail_storage_root }}/{{ mail_domain }}/%n/Maildir
+
+mail_uid = {{ mail_virtual_user }}
+mail_gid = {{ mail_virtual_group }}
+
+first_valid_uid = {{ mail_virtual_uid }}
+last_valid_uid = {{ mail_virtual_uid }}

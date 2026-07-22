@@ -1,0 +1,11 @@
+# Configuration gérée par Ansible - EduSmart
+
+passdb {
+  driver = ldap
+  args = /etc/dovecot/dovecot-ldap.conf.ext
+}
+
+userdb {
+  driver = static
+  args = uid={{ mail_virtual_user }} gid={{ mail_virtual_group }} home={{ mail_storage_root }}/{{ mail_domain }}/%n
+}

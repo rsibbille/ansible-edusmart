@@ -1,0 +1,7 @@
+# Configuration gérée par Ansible - EduSmart
+
+listen = *
+protocols = imap lmtp
+
+!include conf.d/*.conf
+!include_try local.conf

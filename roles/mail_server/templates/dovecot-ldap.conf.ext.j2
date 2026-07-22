@@ -1,0 +1,14 @@
+# Configuration gérée par Ansible - EduSmart
+
+uris = {{ mail_ldap_uris | join(' ') }}
+ldap_version = 3
+
+base = {{ mail_ldap_people_base }}
+scope = subtree
+deref = never
+
+auth_bind = yes
+auth_bind_userdn = uid=%n,{{ mail_ldap_people_base }}
+
+tls_ca_cert_file = {{ mail_tls_ca_certificate }}
+tls_require_cert = hard

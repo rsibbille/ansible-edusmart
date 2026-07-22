@@ -1,0 +1,19 @@
+---
+mail_domain: edusmart.lan
+mail_hostname: mail.edusmart.lan
+
+mail_virtual_user: vmail
+mail_virtual_group: vmail
+mail_virtual_uid: 5000
+mail_virtual_gid: 5000
+mail_storage_root: /var/vmail
+
+mail_ldap_uris:
+  - ldaps://ldap.edusmart.lan
+  - ldaps://ldap-replica.edusmart.lan
+
+mail_ldap_people_base: ou=People,dc=edusmart,dc=lan
+
+mail_tls_certificate: /etc/mail/tls/mail-server.crt
+mail_tls_private_key: /etc/mail/tls/mail-server.key
+mail_tls_ca_certificate: /etc/mail/tls/edusmart-root-ca.crt

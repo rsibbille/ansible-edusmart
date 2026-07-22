@@ -1,0 +1,131 @@
+---
+- name: Préconfigurer temporairement Postfix en distribution locale
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "Local only"
+    vtype: select
+
+- name: Préconfigurer le domaine Postfix
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/mailname
+    value: "{{ mail_domain }}"
+    vtype: string
+
+- name: Installer Postfix, Dovecot et leurs modules
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - postfix-ldap
+      - dovecot-core
+      - dovecot-imapd
+      - dovecot-lmtpd
+      - dovecot-ldap
+      - ldap-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Créer le groupe virtuel de messagerie
+  ansible.builtin.group:
+    name: "{{ mail_virtual_group }}"
+    gid: "{{ mail_virtual_gid }}"
+    system: true
+    state: present
+
+- name: Créer l'utilisateur virtuel de messagerie
+  ansible.builtin.user:
+    name: "{{ mail_virtual_user }}"
+    uid: "{{ mail_virtual_uid }}"
+    group: "{{ mail_virtual_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Créer la racine des boîtes mail
+  ansible.builtin.file:
+    path: "{{ mail_storage_root }}/{{ mail_domain }}"
+    state: directory
+    owner: "{{ mail_virtual_user }}"
+    group: "{{ mail_virtual_group }}"
+    mode: "0750"
+
+- name: Vérifier la présence des fichiers TLS
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ mail_tls_certificate }}"
+    - "{{ mail_tls_private_key }}"
+    - "{{ mail_tls_ca_certificate }}"
+  register: mail_tls_files
+
+- name: Refuser le déploiement si un fichier TLS manque
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: "Le fichier TLS {{ item.item }} est absent."
+  loop: "{{ mail_tls_files.results }}"
+
+- name: Déployer la configuration principale Dovecot
+  ansible.builtin.template:
+    src: dovecot.conf.j2
+    dest: /etc/dovecot/dovecot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer Dovecot
+
+- name: Déployer les configurations Dovecot
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - src: 10-auth.conf.j2
+      dest: /etc/dovecot/conf.d/10-auth.conf
+      mode: "0644"
+    - src: auth-ldap.conf.ext.j2
+      dest: /etc/dovecot/conf.d/auth-ldap.conf.ext
+      mode: "0644"
+    - src: dovecot-ldap.conf.ext.j2
+      dest: /etc/dovecot/dovecot-ldap.conf.ext
+      mode: "0600"
+    - src: 10-mail.conf.j2
+      dest: /etc/dovecot/conf.d/10-mail.conf
+      mode: "0644"
+    - src: 10-master.conf.j2
+      dest: /etc/dovecot/conf.d/10-master.conf
+      mode: "0644"
+    - src: 10-ssl.conf.j2
+      dest: /etc/dovecot/conf.d/10-ssl.conf
+      mode: "0644"
+    - src: 20-lmtp.conf.j2
+      dest: /etc/dovecot/conf.d/20-lmtp.conf
+      mode: "0644"
+  notify: Redémarrer Dovecot
+
+- name: Vérifier la syntaxe Dovecot
+  ansible.builtin.command:
+    cmd: doveconf -n
+  changed_when: false
+
+- name: Activer et démarrer Dovecot
+  ansible.builtin.systemd_service:
+    name: dovecot
+    enabled: true
+    state: started
+
+- name: Appliquer immédiatement les handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre le port IMAPS
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 993
+    state: started
+    timeout: 30
