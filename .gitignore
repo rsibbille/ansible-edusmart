@@ -15,3 +15,5 @@ vault-password*
 __pycache__/
 .ansible/
 facts/
+.pki/
+*.unreadable-*

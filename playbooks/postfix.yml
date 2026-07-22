@@ -4,5 +4,8 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../inventories/production/vault/smtp.yml
+
   roles:
     - role: postfix_relay

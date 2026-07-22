@@ -1,4 +1,16 @@
 ---
+- name: Vérifier les identifiants du smarthost
+  ansible.builtin.assert:
+    that:
+      - vault_postfix_smtp_username is defined
+      - vault_postfix_smtp_username | length > 5
+      - vault_postfix_smtp_app_password is defined
+      - vault_postfix_smtp_app_password | replace(' ', '') | length >= 16
+      - postfix_relayhost == "smtp.gmail.com"
+      - postfix_relayport | int == 587
+    fail_msg: "Les paramètres du smarthost Gmail sont incomplets."
+  no_log: true
+
 - name: Préconfigurer le type d'installation Postfix
   ansible.builtin.debconf:
     name: postfix
@@ -13,14 +25,42 @@
     value: "{{ postfix_mydomain }}"
     vtype: string
 
-- name: Installer Postfix et les outils SMTP
+- name: Installer Postfix et les dépendances SMTP
   ansible.builtin.apt:
     name:
       - postfix
       - mailutils
       - swaks
+      - libsasl2-modules
+      - ca-certificates
     state: present
     update_cache: true
+    cache_valid_time: 3600
+
+- name: Déployer les identifiants SASL du smarthost
+  ansible.builtin.template:
+    src: sasl_passwd.j2
+    dest: /etc/postfix/sasl_passwd
+    owner: root
+    group: root
+    mode: "0600"
+  register: postfix_sasl_credentials
+  no_log: true
+  notify: Redémarrer Postfix
+
+- name: Générer la table SASL Postfix
+  ansible.builtin.command:
+    cmd: postmap /etc/postfix/sasl_passwd
+  when: postfix_sasl_credentials.changed
+  no_log: true
+  notify: Redémarrer Postfix
+
+- name: Protéger la base SASL générée
+  ansible.builtin.file:
+    path: /etc/postfix/sasl_passwd.db
+    owner: root
+    group: root
+    mode: "0600"
 
 - name: Déployer la configuration Postfix
   ansible.builtin.template:
@@ -66,15 +106,17 @@
     port: 25
     timeout: 30
 
-- name: Lire la configuration Postfix effective
-  ansible.builtin.command:
-    cmd: postconf -n
-  register: postfix_effective_config
-  changed_when: false
+- name: Vérifier la connectivité avec Gmail
+  ansible.builtin.wait_for:
+    host: "{{ postfix_relayhost }}"
+    port: "{{ postfix_relayport }}"
+    connect_timeout: 5
+    timeout: 10
+    state: started
 
 - name: Afficher la configuration principale
   ansible.builtin.debug:
     msg:
       - "Hostname : {{ postfix_myhostname }}"
-      - "Relayhost : [{{ postfix_relayhost }}]:{{ postfix_relayport }}"
+      - "Smarthost : [{{ postfix_relayhost }}]:{{ postfix_relayport }}"
       - "Clients autorisés : {{ postfix_mynetworks | join(', ') }}"

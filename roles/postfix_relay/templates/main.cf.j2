@@ -8,7 +8,18 @@ inet_interfaces = all
 inet_protocols = ipv4
 
 mydestination = $myhostname, localhost.$mydomain, localhost
+
+# Smarthost Gmail authentifié
 relayhost = [{{ postfix_relayhost }}]:{{ postfix_relayport }}
+
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_sasl_tls_security_options = noanonymous
+
+smtp_tls_security_level = encrypt
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
 
 mynetworks = {{ postfix_mynetworks | join(', ') }}
 
