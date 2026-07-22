@@ -1,0 +1,18 @@
+---
+pki_server_directory: /etc/ldap/tls
+
+pki_server_private_key_path: "{{ pki_server_directory }}/ldap-server.key"
+pki_server_certificate_path: "{{ pki_server_directory }}/ldap-server.crt"
+pki_server_ca_certificate_path: "{{ pki_server_directory }}/edusmart-root-ca.crt"
+
+pki_local_root_directory: "{{ playbook_dir }}/../.pki"
+pki_local_ca_directory: "{{ pki_local_root_directory }}/ca"
+pki_local_ca_private_key_path: "{{ pki_local_ca_directory }}/edusmart-root-ca.key"
+pki_local_ca_certificate_path: "{{ pki_local_ca_directory }}/edusmart-root-ca.crt"
+
+pki_server_key_size: 4096
+pki_server_validity: "+825d"
+
+pki_server_country: FR
+pki_server_organization: EduSmart
+pki_server_organizational_unit: Infrastructure

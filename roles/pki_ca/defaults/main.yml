@@ -1,0 +1,13 @@
+---
+pki_root_directory: "{{ playbook_dir }}/../.pki"
+pki_ca_directory: "{{ pki_root_directory }}/ca"
+
+pki_ca_private_key_path: "{{ pki_ca_directory }}/edusmart-root-ca.key"
+pki_ca_certificate_path: "{{ pki_ca_directory }}/edusmart-root-ca.crt"
+
+pki_ca_common_name: EduSmart Root CA
+pki_ca_organization: EduSmart
+pki_ca_country: FR
+
+pki_ca_key_size: 4096
+pki_ca_validity: "+3650d"

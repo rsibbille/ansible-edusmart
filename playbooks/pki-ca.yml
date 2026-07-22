@@ -1,0 +1,12 @@
+---
+- name: Créer l'autorité de certification EduSmart
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+
+  vars_files:
+    - ../inventories/production/vault/pki.yml
+
+  roles:
+    - role: pki_ca

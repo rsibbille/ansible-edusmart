@@ -2,3 +2,15 @@
 dns_client_nameservers:
   - 127.0.0.1
   - 10.10.20.22
+
+pki_server_common_name: srv-prd-par-idm-001.edusmart.lan
+
+pki_server_subject_alt_names:
+  - DNS:srv-prd-par-idm-001.edusmart.lan
+  - DNS:srv-prd-par-idm-001
+  - DNS:ldap.edusmart.lan
+  - IP:10.10.20.21
+
+pki_server_verify_names:
+  - srv-prd-par-idm-001.edusmart.lan
+  - ldap.edusmart.lan

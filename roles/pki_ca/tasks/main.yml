@@ -1,0 +1,68 @@
+---
+- name: Vérifier la présence de la phrase secrète de la CA
+  ansible.builtin.assert:
+    that:
+      - vault_pki_ca_passphrase is defined
+      - vault_pki_ca_passphrase | length >= 20
+    fail_msg: >-
+      vault_pki_ca_passphrase doit être définie dans le fichier
+      Vault et contenir au moins 20 caractères.
+  no_log: true
+
+- name: Créer le répertoire privé de la PKI
+  ansible.builtin.file:
+    path: "{{ pki_ca_directory }}"
+    state: directory
+    mode: "0700"
+
+- name: Générer la clé privée chiffrée de la CA
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_ca_private_key_path }}"
+    type: RSA
+    size: "{{ pki_ca_key_size }}"
+    passphrase: "{{ vault_pki_ca_passphrase }}"
+    cipher: auto
+    mode: "0600"
+    regenerate: never
+  no_log: true
+
+- name: Générer la demande de certificat de la CA
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ pki_ca_private_key_path }}"
+    privatekey_passphrase: "{{ vault_pki_ca_passphrase }}"
+    common_name: "{{ pki_ca_common_name }}"
+    organization_name: "{{ pki_ca_organization }}"
+    country_name: "{{ pki_ca_country }}"
+    use_common_name_for_san: false
+    basic_constraints:
+      - "CA:TRUE"
+    basic_constraints_critical: true
+    key_usage:
+      - keyCertSign
+      - cRLSign
+    key_usage_critical: true
+  register: pki_ca_csr
+  changed_when: false
+  no_log: true
+
+- name: Générer le certificat autosigné de la CA
+  community.crypto.x509_certificate:
+    path: "{{ pki_ca_certificate_path }}"
+    csr_content: "{{ pki_ca_csr.csr }}"
+    privatekey_path: "{{ pki_ca_private_key_path }}"
+    privatekey_passphrase: "{{ vault_pki_ca_passphrase }}"
+    provider: selfsigned
+    selfsigned_not_before: "-1d"
+    selfsigned_not_after: "{{ pki_ca_validity }}"
+    mode: "0644"
+  no_log: true
+
+- name: Vérifier le certificat de la CA
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - verify
+      - -CAfile
+      - "{{ pki_ca_certificate_path }}"
+      - "{{ pki_ca_certificate_path }}"
+  changed_when: false
