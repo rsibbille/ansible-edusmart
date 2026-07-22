@@ -2,3 +2,20 @@
 dns_client_nameservers:
   - 10.10.20.21
   - 10.10.20.22
+
+pki_server_common_name: srv-prd-par-mail-001.edusmart.lan
+
+pki_server_subject_alt_names:
+  - DNS:srv-prd-par-mail-001.edusmart.lan
+  - DNS:srv-prd-par-mail-001
+  - DNS:mail.edusmart.lan
+  - IP:10.10.20.23
+
+pki_server_verify_names:
+  - srv-prd-par-mail-001.edusmart.lan
+  - mail.edusmart.lan
+
+pki_server_directory: /etc/mail/tls
+pki_server_private_key_path: /etc/mail/tls/mail-server.key
+pki_server_certificate_path: /etc/mail/tls/mail-server.crt
+pki_server_ca_certificate_path: /etc/mail/tls/edusmart-root-ca.crt
