@@ -1,0 +1,13 @@
+# Configuration gérée par Ansible - EduSmart
+
+server_host = {{ mail_ldap_uris | join(' ') }}
+version = 3
+bind = no
+
+search_base = {{ mail_ldap_people_base }}
+scope = sub
+query_filter = (&(objectClass=inetOrgPerson)(mail=%s))
+result_attribute = uid
+
+tls_ca_cert_file = {{ mail_tls_ca_certificate }}
+tls_require_cert = yes

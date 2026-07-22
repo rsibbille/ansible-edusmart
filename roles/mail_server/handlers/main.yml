@@ -3,3 +3,8 @@
   ansible.builtin.systemd_service:
     name: dovecot
     state: restarted
+
+- name: Redémarrer Postfix
+  ansible.builtin.systemd_service:
+    name: postfix
+    state: restarted

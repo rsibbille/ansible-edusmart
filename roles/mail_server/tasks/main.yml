@@ -129,3 +129,7 @@
     port: 993
     state: started
     timeout: 30
+
+
+- name: Configurer Postfix, Submission et LMTP
+  ansible.builtin.include_tasks: postfix.yml

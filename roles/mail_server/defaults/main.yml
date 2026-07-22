@@ -17,3 +17,9 @@ mail_ldap_people_base: ou=People,dc=edusmart,dc=lan
 mail_tls_certificate: /etc/mail/tls/mail-server.crt
 mail_tls_private_key: /etc/mail/tls/mail-server.key
 mail_tls_ca_certificate: /etc/mail/tls/edusmart-root-ca.crt
+
+mail_relayhost: 10.10.20.24
+mail_relayport: 25
+
+mail_postmaster_recipient: testldap@edusmart.lan
+mail_message_size_limit: 10485760

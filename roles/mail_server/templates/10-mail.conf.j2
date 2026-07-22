@@ -7,3 +7,8 @@ mail_gid = {{ mail_virtual_group }}
 
 first_valid_uid = {{ mail_virtual_uid }}
 last_valid_uid = {{ mail_virtual_uid }}
+
+# Un unique namespace doit porter la boîte INBOX principale.
+namespace inbox {
+  inbox = yes
+}

@@ -1,0 +1,157 @@
+---
+- name: Installer les composants Postfix complémentaires
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - postfix-ldap
+      - ca-certificates
+      - swaks
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Rechercher les implémentations SASL disponibles
+  ansible.builtin.command:
+    cmd: postconf -a
+  register: mail_postfix_sasl_modules
+  changed_when: false
+
+- name: Vérifier le support Dovecot SASL
+  ansible.builtin.assert:
+    that:
+      - "'dovecot' in mail_postfix_sasl_modules.stdout_lines"
+    fail_msg: "Postfix ne prend pas en charge Dovecot SASL."
+
+- name: Rechercher les types de tables Postfix
+  ansible.builtin.command:
+    cmd: postconf -m
+  register: mail_postfix_map_types
+  changed_when: false
+
+- name: Vérifier le support LDAP de Postfix
+  ansible.builtin.assert:
+    that:
+      - "'ldap' in mail_postfix_map_types.stdout_lines"
+    fail_msg: "Le module LDAP de Postfix est indisponible."
+
+- name: Vérifier le socket SASL Dovecot
+  ansible.builtin.stat:
+    path: /var/spool/postfix/private/auth
+  register: mail_dovecot_auth_socket
+
+- name: Refuser le déploiement sans socket SASL
+  ansible.builtin.assert:
+    that:
+      - mail_dovecot_auth_socket.stat.exists
+      - mail_dovecot_auth_socket.stat.issock
+    fail_msg: "Le socket SASL Dovecot est absent."
+
+- name: Déployer les tables LDAP Postfix
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: postfix
+    mode: "0640"
+  loop:
+    - src: postfix-ldap-virtual-mailboxes.cf.j2
+      dest: /etc/postfix/ldap-virtual-mailboxes.cf
+    - src: postfix-ldap-sender-login.cf.j2
+      dest: /etc/postfix/ldap-sender-login.cf
+  notify: Redémarrer Postfix
+
+- name: Déployer les alias virtuels
+  ansible.builtin.template:
+    src: postfix-virtual.j2
+    dest: /etc/postfix/virtual
+    owner: root
+    group: postfix
+    mode: "0640"
+  register: mail_postfix_virtual_aliases
+  notify: Redémarrer Postfix
+
+- name: Générer la table des alias virtuels
+  ansible.builtin.command:
+    cmd: postmap /etc/postfix/virtual
+  when: mail_postfix_virtual_aliases.changed
+  notify: Redémarrer Postfix
+
+- name: Protéger la base des alias virtuels
+  ansible.builtin.file:
+    path: /etc/postfix/virtual.db
+    owner: root
+    group: postfix
+    mode: "0640"
+
+- name: Déployer main.cf
+  ansible.builtin.template:
+    src: postfix-main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Redémarrer Postfix
+
+- name: Déployer master.cf
+  ansible.builtin.template:
+    src: postfix-master.cf.j2
+    dest: /etc/postfix/master.cf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Redémarrer Postfix
+
+- name: Vérifier la recherche LDAP des boîtes
+  ansible.builtin.command:
+    argv:
+      - postmap
+      - -q
+      - testldap@edusmart.lan
+      - ldap:/etc/postfix/ldap-virtual-mailboxes.cf
+  register: mail_postfix_mailbox_lookup
+  changed_when: false
+
+- name: Valider le résultat LDAP de la boîte
+  ansible.builtin.assert:
+    that:
+      - mail_postfix_mailbox_lookup.stdout == "testldap@edusmart.lan"
+    fail_msg: "La recherche LDAP Postfix de testldap a échoué."
+
+- name: Vérifier la recherche LDAP de l'expéditeur
+  ansible.builtin.command:
+    argv:
+      - postmap
+      - -q
+      - testldap@edusmart.lan
+      - ldap:/etc/postfix/ldap-sender-login.cf
+  register: mail_postfix_sender_lookup
+  changed_when: false
+
+- name: Valider le propriétaire de l'adresse
+  ansible.builtin.assert:
+    that:
+      - mail_postfix_sender_lookup.stdout == "testldap"
+    fail_msg: "Le contrôle LDAP de l'expéditeur a échoué."
+
+- name: Vérifier la configuration Postfix
+  ansible.builtin.command:
+    cmd: postfix check
+  changed_when: false
+
+- name: Activer et démarrer Postfix
+  ansible.builtin.systemd_service:
+    name: postfix
+    enabled: true
+    state: started
+
+- name: Appliquer immédiatement les handlers Postfix
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre le port Submission
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 587
+    state: started
+    timeout: 30

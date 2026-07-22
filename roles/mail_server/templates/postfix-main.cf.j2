@@ -1,0 +1,84 @@
+# Configuration gérée par Ansible - EduSmart
+
+compatibility_level = 3.6
+
+myhostname = {{ mail_hostname }}
+mydomain = {{ mail_domain }}
+myorigin = $mydomain
+
+inet_interfaces = all
+inet_protocols = ipv4
+
+# Le domaine edusmart.lan est virtuel : ne pas l'ajouter ici.
+mydestination = $myhostname, localhost.$mydomain, localhost
+
+# Seuls le relais SMTP et localhost utilisent le port 25.
+mynetworks = 127.0.0.0/8, {{ mail_relayhost }}/32
+
+# Relais de sortie EduSmart.
+relayhost = [{{ mail_relayhost }}]:{{ mail_relayport }}
+
+# Boîtes virtuelles LDAP et livraison Dovecot LMTP.
+virtual_mailbox_domains = {{ mail_domain }}
+virtual_mailbox_maps = ldap:/etc/postfix/ldap-virtual-mailboxes.cf
+virtual_alias_maps = hash:/etc/postfix/virtual
+virtual_transport = lmtp:unix:private/dovecot-lmtp
+
+# TLS entrant.
+smtpd_tls_cert_file = {{ mail_tls_certificate }}
+smtpd_tls_key_file = {{ mail_tls_private_key }}
+smtpd_tls_CAfile = {{ mail_tls_ca_certificate }}
+smtpd_tls_security_level = may
+smtpd_tls_auth_only = yes
+smtpd_tls_received_header = yes
+smtpd_tls_loglevel = 1
+
+# TLS sortant vers le relais EduSmart.
+smtp_tls_security_level = may
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+
+# SASL fourni par Dovecot.
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_auth_enable = no
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_tls_security_options = noanonymous
+
+# Contrôle du relais.
+smtpd_relay_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_unauth_destination
+
+# Le port 25 est réservé au relais EduSmart.
+smtpd_client_restrictions =
+    permit_mynetworks,
+    reject
+
+smtpd_sender_restrictions =
+    reject_non_fqdn_sender
+
+smtpd_recipient_restrictions =
+    reject_non_fqdn_recipient,
+    reject_unknown_recipient_domain
+
+smtpd_data_restrictions =
+    reject_unauth_pipelining
+
+smtpd_reject_unlisted_recipient = yes
+unknown_virtual_mailbox_reject_code = 550
+
+disable_vrfy_command = yes
+smtpd_helo_required = yes
+smtpd_banner = $myhostname ESMTP EduSmart
+
+message_size_limit = {{ mail_message_size_limit }}
+mailbox_size_limit = 0
+recipient_delimiter = +
+
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+
+biff = no
+append_dot_mydomain = no
+readme_directory = no
