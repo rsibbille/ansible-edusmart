@@ -1,6 +1,6 @@
 ---
 - name: Configurer les DNS internes EduSmart
-  hosts: ansible_controllers:idm_servers:mail_servers:smtp_relays:teleport_servers
+  hosts: ansible_controllers:idm_servers:mail_servers:smtp_relays:teleport_servers:docker_hosts
   become: true
   gather_facts: true
 

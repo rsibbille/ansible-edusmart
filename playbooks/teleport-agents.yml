@@ -1,6 +1,6 @@
 ---
 - name: Enrôler les serveurs Linux dans Teleport
-  hosts: idm_servers:mail_servers:smtp_relays
+  hosts: idm_servers:mail_servers:smtp_relays:docker_hosts
   serial: 1
   become: true
   gather_facts: true
