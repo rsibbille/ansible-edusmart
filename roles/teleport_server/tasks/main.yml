@@ -1,0 +1,103 @@
+---
+- name: Vérifier que l'architecture est prise en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in ['x86_64', 'amd64']
+    fail_msg: "Architecture non prise en charge par ce rôle Teleport."
+
+- name: Installer les dépendances Teleport
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - openssl
+    state: present
+    update_cache: true
+
+- name: Vérifier si Teleport est déjà installé
+  ansible.builtin.command:
+    cmd: teleport version
+  register: teleport_existing_version
+  changed_when: false
+  failed_when: false
+
+- name: Installer Teleport Community Edition
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://cdn.teleport.dev/install.sh \
+      | bash -s {{ teleport_version }}
+  args:
+    executable: /bin/bash
+  when:
+    - teleport_existing_version.rc != 0
+      or teleport_version not in teleport_existing_version.stdout
+  notify: Redémarrer Teleport
+
+- name: Créer le répertoire de données Teleport
+  ansible.builtin.file:
+    path: "{{ teleport_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Générer la clé TLS privée temporaire
+  ansible.builtin.command:
+    cmd: >
+      openssl genrsa
+      -out {{ teleport_tls_key_file }}
+      4096
+  args:
+    creates: "{{ teleport_tls_key_file }}"
+  notify: Redémarrer Teleport
+
+- name: Protéger la clé TLS privée
+  ansible.builtin.file:
+    path: "{{ teleport_tls_key_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Générer le certificat TLS interne temporaire
+  ansible.builtin.command:
+    cmd: >
+      openssl req
+      -x509
+      -new
+      -sha256
+      -days 365
+      -key {{ teleport_tls_key_file }}
+      -out {{ teleport_tls_cert_file }}
+      -subj /C=FR/O=EduSmart/OU=Infrastructure/CN={{ teleport_cluster_name }}
+      -addext subjectAltName=DNS:{{ teleport_cluster_name }},IP:10.10.30.21
+  args:
+    creates: "{{ teleport_tls_cert_file }}"
+  notify: Redémarrer Teleport
+
+- name: Protéger le certificat TLS
+  ansible.builtin.file:
+    path: "{{ teleport_tls_cert_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la configuration Teleport
+  ansible.builtin.template:
+    src: teleport.yaml.j2
+    dest: "{{ teleport_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  notify: Redémarrer Teleport
+
+- name: Valider la configuration Teleport
+  ansible.builtin.command:
+    cmd: teleport configure --test={{ teleport_config_path }}
+  changed_when: false
+
+- name: Activer et démarrer Teleport
+  ansible.builtin.systemd_service:
+    name: teleport
+    enabled: true
+    state: started

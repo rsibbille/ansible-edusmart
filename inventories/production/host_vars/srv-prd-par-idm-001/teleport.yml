@@ -1,0 +1,8 @@
+---
+teleport_agent_labels:
+  env: production
+  site: paris
+  managed_by: ansible
+  service: identity
+  role: primary
+  zone: system

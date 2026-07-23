@@ -1,0 +1,49 @@
+version: v3
+
+teleport:
+  nodename: "{{ inventory_hostname }}"
+  data_dir: "{{ teleport_data_dir }}"
+  log:
+    output: stderr
+    severity: INFO
+    format:
+      output: text
+  storage:
+    type: sqlite
+
+auth_service:
+  enabled: true
+  cluster_name: "{{ teleport_cluster_name }}"
+  listen_addr: "{{ teleport_auth_listen_addr }}"
+  proxy_listener_mode: multiplex
+  authentication:
+    type: local
+    second_factors:
+      - otp
+      - webauthn
+    webauthn:
+      rp_id: "{{ teleport_cluster_name }}"
+
+proxy_service:
+  enabled: true
+  proxy_protocol: "off"
+  web_listen_addr: "{{ teleport_web_listen_addr }}"
+  public_addr: "{{ teleport_public_addr }}"
+  https_keypairs:
+    - key_file: "{{ teleport_tls_key_file }}"
+      cert_file: "{{ teleport_tls_cert_file }}"
+
+ssh_service:
+  enabled: {{ teleport_enable_ssh_service | bool | lower }}
+
+app_service:
+  enabled: false
+
+db_service:
+  enabled: false
+
+kubernetes_service:
+  enabled: false
+
+discovery_service:
+  enabled: false

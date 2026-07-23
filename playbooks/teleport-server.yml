@@ -1,0 +1,8 @@
+---
+- name: Installer le bastion Teleport EduSmart
+  hosts: teleport_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: teleport_server

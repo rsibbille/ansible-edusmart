@@ -1,5 +1,6 @@
 ---
+dns_client_servers:
+  - 10.10.20.21
+  - 10.10.20.22
+
 dns_client_search_domain: edusmart.lan
-dns_client_options:
-  - timeout:2
-  - attempts:2

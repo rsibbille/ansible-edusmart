@@ -1,0 +1,16 @@
+---
+teleport_agent_version: "18.9.2"
+teleport_agent_proxy: "teleport.edusmart.lan:443"
+teleport_agent_ca_pin: "sha256:9e7913c30f54cb06b4d74ee6fe13421d2891e160d968a93c55f8343ce9bb06bb"
+
+teleport_agent_data_dir: "/var/lib/teleport"
+teleport_agent_config_path: "/etc/teleport.yaml"
+
+teleport_join_token: "{{ lookup('env', 'TELEPORT_JOIN_TOKEN') }}"
+
+teleport_agent_labels:
+  env: production
+  site: paris
+  managed_by: ansible
+  service: linux
+  zone: system

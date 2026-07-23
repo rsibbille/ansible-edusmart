@@ -1,0 +1,101 @@
+---
+- name: Vérifier la résolution du Proxy Teleport
+  ansible.builtin.command:
+    cmd: getent hosts teleport.edusmart.lan
+  register: teleport_agent_dns
+  changed_when: false
+  failed_when:
+    - teleport_agent_dns.rc != 0
+    - "'10.10.30.21' not in teleport_agent_dns.stdout"
+
+- name: Installer les dépendances
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installer le certificat public du Proxy
+  ansible.builtin.copy:
+    src: teleport-edusmart.crt
+    dest: /usr/local/share/ca-certificates/teleport-edusmart.crt
+    owner: root
+    group: root
+    mode: "0644"
+  register: teleport_agent_ca_certificate
+
+- name: Actualiser le magasin de certificats
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  when: teleport_agent_ca_certificate.changed
+  changed_when: true
+
+- name: Vérifier l'accès HTTPS au Proxy
+  ansible.builtin.uri:
+    url: https://teleport.edusmart.lan/v1/webapi/ping
+    method: GET
+    status_code: 200
+    validate_certs: true
+
+- name: Vérifier si Teleport est installé
+  ansible.builtin.command:
+    cmd: teleport version
+  register: teleport_agent_existing_version
+  changed_when: false
+  failed_when: false
+
+- name: Installer Teleport Community Edition
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://cdn.teleport.dev/install.sh |
+      bash -s {{ teleport_agent_version }}
+  args:
+    executable: /bin/bash
+  when:
+    - teleport_agent_existing_version.rc != 0
+      or teleport_agent_version not in teleport_agent_existing_version.stdout
+
+- name: Créer le répertoire de données
+  ansible.builtin.file:
+    path: "{{ teleport_agent_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Déployer la configuration de l'agent
+  ansible.builtin.template:
+    src: teleport.yaml.j2
+    dest: "{{ teleport_agent_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  no_log: true
+  notify: Redémarrer l'agent Teleport
+
+- name: Valider la configuration Teleport
+  ansible.builtin.command:
+    cmd: teleport configure --test={{ teleport_agent_config_path }}
+  changed_when: false
+  no_log: true
+
+- name: Activer et démarrer Teleport
+  ansible.builtin.systemd_service:
+    name: teleport
+    enabled: true
+    state: started
+
+- name: Appliquer immédiatement le redémarrage
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre que le service Teleport soit actif
+  ansible.builtin.command:
+    cmd: systemctl is-active teleport
+  register: teleport_agent_service
+  changed_when: false
+  retries: 12
+  delay: 5
+  until: teleport_agent_service.stdout == "active"

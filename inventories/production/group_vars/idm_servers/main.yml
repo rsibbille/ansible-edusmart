@@ -9,7 +9,7 @@ dns_secondary_hostname: srv-prd-par-idm-002
 dns_secondary_ip: 10.10.20.22
 
 # À incrémenter à chaque modification des zones.
-dns_zone_serial: 2026072102
+dns_zone_serial: 2026072301
 
 dns_forwarders:
   - 10.10.20.1
@@ -37,6 +37,8 @@ dns_records:
     address: 10.10.30.11
   - name: srv-prd-par-dkr-001
     address: 10.10.50.11
+  - name: teleport
+    address: 10.10.30.21
   - name: ns1
     address: 10.10.20.21
   - name: ns2

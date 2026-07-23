@@ -1,0 +1,6 @@
+---
+- name: Redémarrer l'agent Teleport
+  ansible.builtin.systemd_service:
+    name: teleport
+    state: restarted
+    enabled: true

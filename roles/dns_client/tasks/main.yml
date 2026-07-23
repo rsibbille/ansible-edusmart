@@ -1,54 +1,42 @@
 ---
-- name: Vérifier que les serveurs DNS sont définis
-  ansible.builtin.assert:
-    that:
-      - dns_client_nameservers is defined
-      - dns_client_nameservers | length >= 1
-    fail_msg: "La variable dns_client_nameservers doit être définie."
-
-- name: Installer les outils DNS
+- name: Installer systemd-resolved et les outils DNS
   ansible.builtin.apt:
     name:
+      - systemd-resolved
       - dnsutils
     state: present
     update_cache: true
-    cache_valid_time: 3600
 
-- name: Vérifier les serveurs DNS avant bascule
-  ansible.builtin.command:
-    cmd: >-
-      dig @{{ item }}
-      edusmart.lan SOA
-      +short +time=2 +tries=1
-  loop: "{{ dns_client_nameservers }}"
-  changed_when: false
-  when: not ansible_check_mode
-
-- name: Vérifier la présence de la sauvegarde resolv.conf
-  ansible.builtin.stat:
-    path: /etc/resolv.conf.pre-ansible
-  register: dns_resolv_backup
-
-- name: Sauvegarder la configuration DNS initiale
-  ansible.builtin.copy:
-    src: /etc/resolv.conf
-    dest: /etc/resolv.conf.pre-ansible
-    remote_src: true
-    owner: root
-    group: root
-    mode: "0644"
-  when: not dns_resolv_backup.stat.exists
-
-- name: Configurer les résolveurs DNS
+- name: Déployer la configuration DNS permanente
   ansible.builtin.template:
-    src: resolv.conf.j2
-    dest: /etc/resolv.conf
+    src: resolved.conf.j2
+    dest: /etc/systemd/resolved.conf
     owner: root
     group: root
     mode: "0644"
+  notify: Redémarrer systemd-resolved
 
-- name: Vérifier la résolution DNS finale
+- name: Activer systemd-resolved
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    enabled: true
+    state: started
+
+- name: Utiliser le fichier resolv.conf géré par systemd-resolved
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+
+- name: Appliquer immédiatement les changements DNS
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifier la résolution de Teleport
   ansible.builtin.command:
-    cmd: getent hosts srv-prd-par-idm-001.edusmart.lan
+    cmd: getent hosts teleport.edusmart.lan
+  register: dns_client_teleport_resolution
   changed_when: false
-  when: not ansible_check_mode
+  failed_when:
+    - dns_client_teleport_resolution.rc != 0
+    - "'10.10.30.21' not in dns_client_teleport_resolution.stdout"

@@ -1,0 +1,42 @@
+version: v3
+
+teleport:
+  nodename: "{{ inventory_hostname }}"
+  data_dir: "{{ teleport_agent_data_dir }}"
+{% if teleport_join_token | length > 0 %}
+  join_params:
+    token_name: "{{ teleport_join_token }}"
+    method: token
+{% endif %}
+  proxy_server: "{{ teleport_agent_proxy }}"
+  ca_pin: "{{ teleport_agent_ca_pin }}"
+  log:
+    output: stderr
+    severity: INFO
+    format:
+      output: text
+
+auth_service:
+  enabled: "no"
+
+proxy_service:
+  enabled: "no"
+
+ssh_service:
+  enabled: "yes"
+  labels:
+{% for label_name, label_value in teleport_agent_labels.items() %}
+    {{ label_name }}: "{{ label_value }}"
+{% endfor %}
+
+app_service:
+  enabled: "no"
+
+db_service:
+  enabled: "no"
+
+kubernetes_service:
+  enabled: "no"
+
+discovery_service:
+  enabled: "no"
