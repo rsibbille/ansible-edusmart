@@ -9,7 +9,7 @@
     linux_admin_user: eds_admin
 
     linux_admin_public_keys:
-      - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/ruben.pub') }}"
+      - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/eds_admin.pub') }}"
 
   tasks:
     - name: Créer le groupe des administrateurs Linux EduSmart
