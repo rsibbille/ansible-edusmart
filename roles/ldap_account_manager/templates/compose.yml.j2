@@ -1,0 +1,51 @@
+---
+name: edusmart-lam
+
+services:
+  lam:
+    image: "{{ lam_image }}"
+    container_name: "{{ lam_container_name }}"
+    restart: unless-stopped
+
+    environment:
+      TZ: "{{ lam_timezone }}"
+      LAM_PASSWORD: "${LAM_CONFIG_PASSWORD}"
+      LAM_LANG: "{{ lam_language }}"
+      LDAP_SERVER: "{{ lam_ldap_server }}"
+      LDAP_DOMAIN: "{{ lam_ldap_domain }}"
+      LDAP_BASE_DN: "{{ lam_ldap_base_dn }}"
+      LDAP_USERS_DN: "{{ lam_ldap_users_dn }}"
+      LDAP_GROUPS_DN: "{{ lam_ldap_groups_dn }}"
+      LDAP_ADMIN_USER: "{{ lam_ldap_admin_dn }}"
+
+    ports:
+      - "{{ lam_bind_ip }}:{{ lam_bind_port }}:80"
+
+    volumes:
+      - lam_config:/var/lib/ldap-account-manager/config
+      - lam_sessions:/var/lib/ldap-account-manager/sess
+      - ./certificates/edusmart-root-ca.crt:/etc/ssl/certs/edusmart-root-ca.crt:ro
+      - ./ldap.conf:/etc/ldap/ldap.conf:ro
+
+    networks:
+      - edusmart_proxy
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/lam/ >/dev/null 2>&1 || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+volumes:
+  lam_config:
+    name: edusmart_lam_config
+  lam_sessions:
+    name: edusmart_lam_sessions
+
+networks:
+  edusmart_proxy:
+    external: true
+    name: "{{ lam_proxy_network }}"

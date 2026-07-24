@@ -1,0 +1,125 @@
+---
+- name: Vérifier le secret de configuration LAM
+  ansible.builtin.assert:
+    that:
+      - vault_lam_config_password is defined
+      - vault_lam_config_password | length >= 8
+    fail_msg: >-
+      vault_lam_config_password doit être défini dans le Vault
+      du groupe docker_hosts.
+  no_log: true
+
+- name: Créer les répertoires LAM
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ lam_stack_path }}"
+    - "{{ lam_stack_path }}/certificates"
+
+- name: Vérifier le réseau partagé Nginx Proxy Manager
+  ansible.builtin.command:
+    cmd: "docker network inspect {{ lam_proxy_network }}"
+  register: lam_proxy_network_status
+  changed_when: false
+  failed_when: false
+
+- name: Créer le réseau partagé Nginx Proxy Manager
+  ansible.builtin.command:
+    cmd: "docker network create {{ lam_proxy_network }}"
+  when: lam_proxy_network_status.rc != 0
+
+- name: Installer la CA EduSmart pour LAM
+  ansible.builtin.copy:
+    src: edusmart-root-ca.crt
+    dest: "{{ lam_stack_path }}/certificates/edusmart-root-ca.crt"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la configuration LDAP du conteneur
+  ansible.builtin.template:
+    src: ldap.conf.j2
+    dest: "{{ lam_stack_path }}/ldap.conf"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer le fichier Compose LAM
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ lam_stack_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer le secret LAM
+  ansible.builtin.copy:
+    dest: "{{ lam_stack_path }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      LAM_CONFIG_PASSWORD={{ vault_lam_config_password }}
+  no_log: true
+
+- name: Valider la configuration Compose LAM
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml config --quiet
+    chdir: "{{ lam_stack_path }}"
+  changed_when: false
+
+- name: Démarrer LDAP Account Manager
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml up -d --remove-orphans
+    chdir: "{{ lam_stack_path }}"
+  register: lam_compose
+  changed_when: >-
+    'Created' in lam_compose.stderr or
+    'Recreated' in lam_compose.stderr or
+    'Started' in lam_compose.stderr or
+    'Pulled' in lam_compose.stderr
+
+- name: Attendre l'interface LAM
+  ansible.builtin.uri:
+    url: "http://{{ lam_bind_ip }}:{{ lam_bind_port }}/lam/"
+    status_code: 200
+    validate_certs: false
+  register: lam_health
+  retries: 30
+  delay: 5
+  until: lam_health.status == 200
+
+- name: Vérifier la validation LDAPS depuis le conteneur
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ lam_container_name }}"
+      - openssl
+      - s_client
+      - -connect
+      - srv-prd-par-idm-001.edusmart.lan:636
+      - -servername
+      - srv-prd-par-idm-001.edusmart.lan
+      - -CAfile
+      - /etc/ssl/certs/edusmart-root-ca.crt
+  register: lam_ldaps_test
+  changed_when: false
+  failed_when: >
+    'Verify return code: 0 (ok)' not in
+    (lam_ldaps_test.stdout ~ lam_ldaps_test.stderr)
+
+- name: Afficher l'état de LAM
+  ansible.builtin.command:
+    cmd: docker compose --env-file .env -f compose.yml ps
+    chdir: "{{ lam_stack_path }}"
+  register: lam_status
+  changed_when: false
+
+- name: Résultat du déploiement LAM
+  ansible.builtin.debug:
+    var: lam_status.stdout_lines

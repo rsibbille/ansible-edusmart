@@ -51,6 +51,9 @@ dns_records:
     address: 10.10.20.23
   - name: smtp
     address: 10.10.20.24
+  - name: lam
+    address: 10.10.50.11
+
 
 dns_reverse_records:
   - last_octet: 21

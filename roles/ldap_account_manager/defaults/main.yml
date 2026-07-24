@@ -1,0 +1,20 @@
+---
+lam_stack_path: /opt/edusmart/stacks/ldap-account-manager
+
+lam_image: ghcr.io/ldapaccountmanager/lam:stable
+lam_container_name: ldap-account-manager
+
+lam_bind_ip: 10.10.50.11
+lam_bind_port: 8082
+
+lam_timezone: Europe/Paris
+lam_language: fr_FR
+
+lam_ldap_server: ldaps://srv-prd-par-idm-001.edusmart.lan
+lam_ldap_domain: edusmart.lan
+lam_ldap_base_dn: dc=edusmart,dc=lan
+lam_ldap_users_dn: ou=People,dc=edusmart,dc=lan
+lam_ldap_groups_dn: ou=Groups,dc=edusmart,dc=lan
+lam_ldap_admin_dn: cn=admin,dc=edusmart,dc=lan
+
+lam_proxy_network: edusmart_proxy
