@@ -22,3 +22,7 @@ docker_daemon_config:
   log-opts:
     max-size: "10m"
     max-file: "5"
+
+# Utilisateurs autorisés à administrer Docker sans sudo.
+# À surcharger dans group_vars/docker_hosts.
+docker_admin_users: []

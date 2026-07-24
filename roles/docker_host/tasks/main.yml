@@ -112,3 +112,15 @@
       - "{{ docker_version.stdout }}"
       - "{{ docker_compose_version.stdout }}"
   when: not ansible_check_mode
+
+- name: Ajouter les administrateurs autorisés au groupe Docker
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups:
+      - docker
+    append: true
+    state: present
+  loop: "{{ docker_admin_users }}"
+  when: docker_admin_users | length > 0
+  tags:
+    - docker_access

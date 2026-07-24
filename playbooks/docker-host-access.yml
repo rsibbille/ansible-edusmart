@@ -1,0 +1,8 @@
+---
+- name: Gérer les droits d'administration Docker
+  hosts: docker_hosts
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: docker_host

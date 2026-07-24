@@ -1,0 +1,6 @@
+---
+# Administrateurs autorisés à utiliser directement le socket Docker.
+# Attention : l'appartenance au groupe docker équivaut pratiquement
+# à un accès root sur l'hôte.
+docker_admin_users:
+  - eds_admin
