@@ -1,6 +1,6 @@
 ---
 - name: Déployer les accès administratifs Linux EduSmart
-  hosts: "{{ target_hosts | default('ansible_controllers') }}"
+  hosts: "{{ target_hosts | default('ansible_controllers:linux_servers') }}"
   become: true
   gather_facts: false
 
@@ -36,7 +36,6 @@
         state: present
         manage_dir: true
         exclusive: true
-      when: not ansible_check_mode
 
     - name: Autoriser le groupe EduSmart à utiliser sudo
       ansible.builtin.copy:
@@ -47,3 +46,13 @@
         content: |
           %{{ linux_admin_group }} ALL=(ALL:ALL) NOPASSWD: ALL
         validate: "/usr/sbin/visudo -cf %s"
+
+    - name: Vérifier que le compte administrateur existe
+      ansible.builtin.command:
+        cmd: "id {{ linux_admin_user }}"
+      changed_when: false
+
+    - name: Vérifier les privilèges sudo du compte administrateur
+      ansible.builtin.command:
+        cmd: "sudo -l -U {{ linux_admin_user }}"
+      changed_when: false
