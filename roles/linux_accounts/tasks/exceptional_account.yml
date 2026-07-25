@@ -1,0 +1,11 @@
+---
+- name: Vérifier que le compte exceptionnel eds_admin reste présent
+  ansible.builtin.user:
+    name: "{{ linux_exceptional_admin.username }}"
+    groups:
+      - "{{ linux_admin_group }}"
+      - sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: "{{ 'present' if linux_exceptional_admin.enabled else 'absent' }}"

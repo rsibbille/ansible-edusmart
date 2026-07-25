@@ -35,7 +35,7 @@
         key: "{{ linux_admin_public_keys | join('\n') }}"
         state: present
         manage_dir: true
-        exclusive: true
+        exclusive: false
 
     - name: Autoriser le groupe EduSmart à utiliser sudo
       ansible.builtin.copy:

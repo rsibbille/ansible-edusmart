@@ -1,0 +1,12 @@
+---
+- name: Gérer les comptes administrateurs nominatifs
+  ansible.builtin.import_tasks: human_accounts.yml
+
+- name: Maintenir le compte exceptionnel
+  ansible.builtin.import_tasks: exceptional_account.yml
+
+- name: Maintenir le compte technique Ansible
+  ansible.builtin.import_tasks: ansible_service.yml
+
+- name: Gérer le compte de secours local
+  ansible.builtin.import_tasks: breakglass.yml

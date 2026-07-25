@@ -26,7 +26,8 @@
           PermitTunnel no
           ClientAliveInterval 300
           ClientAliveCountMax 2
-          AllowUsers eds_admin svc_ansible
+          AllowUsers eds_admin svc_ansible r.sibbille s.mousset
+          DenyUsers eds_breakglass
         validate: "/usr/sbin/sshd -t -f %s"
       notify: Recharger SSH
 

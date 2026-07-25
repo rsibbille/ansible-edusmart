@@ -1,0 +1,43 @@
+---
+- name: Créer le groupe des administrateurs EduSmart
+  ansible.builtin.group:
+    name: "{{ linux_admin_group }}"
+    state: present
+
+- name: Créer les comptes administrateurs nominatifs
+  ansible.builtin.user:
+    name: "{{ item.username }}"
+    comment: "{{ item.full_name }}"
+    groups:
+      - "{{ linux_admin_group }}"
+      - sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+    state: present
+  loop: "{{ linux_human_admins }}"
+  loop_control:
+    label: "{{ item.username }}"
+
+- name: Créer le dossier SSH des administrateurs
+  ansible.builtin.file:
+    path: "/home/{{ item.username }}/.ssh"
+    state: directory
+    owner: "{{ item.username }}"
+    group: "{{ item.username }}"
+    mode: "0700"
+  loop: "{{ linux_human_admins }}"
+  loop_control:
+    label: "{{ item.username }}"
+
+- name: Déployer les clés SSH nominatives
+  ansible.posix.authorized_key:
+    user: "{{ item.username }}"
+    key: "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/' + item.ssh_key_file) }}"
+    state: present
+    exclusive: false
+    manage_dir: true
+  loop: "{{ linux_human_admins }}"
+  loop_control:
+    label: "{{ item.username }}"

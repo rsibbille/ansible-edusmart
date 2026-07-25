@@ -1,4 +1,12 @@
 ---
+- name: Créer le répertoire d’exécution OpenSSH
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Appliquer le durcissement SSH EduSmart
   ansible.builtin.blockinfile:
     path: /etc/ssh/sshd_config
@@ -21,5 +29,6 @@
       ClientAliveInterval 300
       ClientAliveCountMax 2
       AllowUsers {{ ssh_allowed_users | join(' ') }}
+      DenyUsers {{ ssh_denied_users | join(' ') }}
     validate: "/usr/sbin/sshd -t -f %s"
   notify: Recharger SSH

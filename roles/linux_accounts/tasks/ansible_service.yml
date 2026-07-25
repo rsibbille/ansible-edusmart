@@ -1,0 +1,13 @@
+---
+- name: Vérifier que le compte technique Ansible existe
+  ansible.builtin.user:
+    name: "{{ linux_ansible_service_account.username }}"
+    comment: Compte technique Ansible EduSmart
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Interdire un mot de passe utilisable à svc_ansible
+  ansible.builtin.user:
+    name: "{{ linux_ansible_service_account.username }}"
+    password_lock: true

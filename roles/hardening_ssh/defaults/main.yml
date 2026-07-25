@@ -2,3 +2,8 @@
 ssh_allowed_users:
   - eds_admin
   - svc_ansible
+  - r.sibbille
+  - s.mousset
+
+ssh_denied_users:
+  - eds_breakglass

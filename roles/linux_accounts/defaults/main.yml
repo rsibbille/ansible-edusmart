@@ -1,0 +1,16 @@
+---
+linux_admin_group: eds_admins
+
+linux_human_admins: []
+
+linux_exceptional_admin:
+  username: eds_admin
+  enabled: true
+
+linux_ansible_service_account:
+  username: svc_ansible
+
+linux_breakglass_account:
+  username: eds_breakglass
+  enabled: true
+  password_hash: ""

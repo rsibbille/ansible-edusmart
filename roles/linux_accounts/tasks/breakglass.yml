@@ -1,0 +1,41 @@
+---
+- name: Vérifier que le hash du compte break-glass est défini
+  ansible.builtin.assert:
+    that:
+      - linux_breakglass_account.password_hash | length > 20
+      - linux_breakglass_account.password_hash is match('^\$[256y]\$')
+    fail_msg: >-
+      Le hash du mot de passe eds_breakglass est absent ou invalide.
+      Définir vault_breakglass_password_hash dans Ansible Vault.
+  when: linux_breakglass_account.enabled | bool
+  no_log: true
+
+- name: Créer le compte local de secours
+  ansible.builtin.user:
+    name: "{{ linux_breakglass_account.username }}"
+    comment: Compte de secours console uniquement
+    groups:
+      - sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password: "{{ linux_breakglass_account.password_hash }}"
+    update_password: always
+    state: present
+  when: linux_breakglass_account.enabled | bool
+  no_log: true
+
+- name: Créer le dossier SSH du compte de secours
+  ansible.builtin.file:
+    path: "/home/{{ linux_breakglass_account.username }}/.ssh"
+    state: directory
+    owner: "{{ linux_breakglass_account.username }}"
+    group: "{{ linux_breakglass_account.username }}"
+    mode: "0700"
+  when: linux_breakglass_account.enabled | bool
+
+- name: Supprimer toute clé SSH du compte break-glass
+  ansible.builtin.file:
+    path: "/home/{{ linux_breakglass_account.username }}/.ssh/authorized_keys"
+    state: absent
+  when: linux_breakglass_account.enabled | bool
