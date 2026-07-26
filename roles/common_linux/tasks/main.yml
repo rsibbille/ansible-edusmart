@@ -39,6 +39,51 @@
     mode: "0644"
   notify: Redémarrer journald
 
+- name: Vérifier qu'une source NTP interne est définie
+  ansible.builtin.assert:
+    that:
+      - common_chrony_servers | length > 0
+    fail_msg: >-
+      common_enable_chrony est activé, mais aucune source n'est définie
+      dans common_chrony_servers.
+  when: common_enable_chrony | bool
+
+- name: S'assurer que le répertoire de configuration Chrony existe
+  ansible.builtin.file:
+    path: /etc/chrony/conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: common_enable_chrony | bool
+
+- name: Activer le répertoire de configuration Chrony
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: '^\s*confdir\s+/etc/chrony/conf\.d\s*$'
+    line: "confdir /etc/chrony/conf.d"
+    state: present
+  notify: Redémarrer Chrony
+  when: common_enable_chrony | bool
+
+- name: Retirer les sources NTP publiques de la configuration principale
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: '^\s*(pool|server)\s+'
+    state: absent
+  notify: Redémarrer Chrony
+  when: common_enable_chrony | bool
+
+- name: Configurer les sources NTP internes EduSmart
+  ansible.builtin.template:
+    src: chrony-edusmart.conf.j2
+    dest: /etc/chrony/conf.d/99-edusmart.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer Chrony
+  when: common_enable_chrony | bool
+
 - name: Activer Chrony
   ansible.builtin.systemd_service:
     name: chrony

@@ -9,7 +9,7 @@ dns_secondary_hostname: srv-prd-par-idm-002
 dns_secondary_ip: 10.10.20.22
 
 # À incrémenter à chaque modification des zones.
-dns_zone_serial: 2026072301
+dns_zone_serial: 2026072501
 
 dns_forwarders:
   - 10.10.20.1
@@ -53,7 +53,8 @@ dns_records:
     address: 10.10.20.24
   - name: lam
     address: 10.10.50.11
-
+  - name: passbolt
+    address: 10.10.50.11
 
 dns_reverse_records:
   - last_octet: 21

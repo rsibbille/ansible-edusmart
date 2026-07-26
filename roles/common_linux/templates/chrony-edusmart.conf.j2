@@ -1,0 +1,8 @@
+# Fichier géré par Ansible — Projet EduSmart
+
+{% for server in common_chrony_servers %}
+server {{ server }} iburst{% if loop.first %} prefer{% endif %}
+
+{% endfor %}
+makestep {{ common_chrony_makestep_threshold }} {{ common_chrony_makestep_updates }}
+rtcsync

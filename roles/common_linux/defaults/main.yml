@@ -19,3 +19,8 @@ common_enable_qemu_guest_agent: true
 common_journal_max_use: 500M
 common_journal_retention: 30day
 common_enable_chrony: true
+
+common_chrony_servers: []
+
+common_chrony_makestep_threshold: 1.0
+common_chrony_makestep_updates: 3
