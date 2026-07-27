@@ -3,6 +3,7 @@ lam_stack_path: /opt/edusmart/stacks/ldap-account-manager
 
 lam_image: ghcr.io/ldapaccountmanager/lam:stable
 lam_container_name: ldap-account-manager
+lam_server_profile: lam
 
 lam_bind_ip: 10.10.50.11
 lam_bind_port: 8082

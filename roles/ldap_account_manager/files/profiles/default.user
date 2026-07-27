@@ -1,0 +1,37 @@
+ldap_suffix: -
+ldap_rdn: uid
+inetOrgPerson_initials: 
+inetOrgPerson_description: 
+inetOrgPerson_street: 
+inetOrgPerson_postOfficeBox: 
+inetOrgPerson_postalCode: 
+inetOrgPerson_l: 
+inetOrgPerson_st: 
+inetOrgPerson_postalAddress: 
+inetOrgPerson_registeredAddress: 
+inetOrgPerson_physicalDeliveryOfficeName: 
+inetOrgPerson_roomNumber: 
+inetOrgPerson_telephoneNumber: 
+inetOrgPerson_facsimileTelephoneNumber: 
+inetOrgPerson_mail: $user@edusmart.lan
+inetOrgPerson_labeledURI: 
+inetOrgPerson_departmentNumber: 
+inetOrgPerson_ou: 
+inetOrgPerson_o: 
+inetOrgPerson_title: 
+inetOrgPerson_employeeType: 
+inetOrgPerson_businessCategory: 
+posixAccount_primaryGroup: *create_group_with_same_name*
+posixAccount_additionalGroup: 
+posixAccount_cn: 
+posixAccount_gecos: $firstname $lastname
+posixAccount_homeDirectory: /home/$user
+posixAccount_loginShell: /bin/bash
+shadowAccount_addExt: false
+shadowAccount_shadowWarning: 10
+shadowAccount_shadowInactive: 10
+shadowAccount_shadowMin: 1
+shadowAccount_shadowMax: 365
+shadowAccount_shadowExpire_day: -
+shadowAccount_shadowExpire_mon: -
+shadowAccount_shadowExpire_yea: -

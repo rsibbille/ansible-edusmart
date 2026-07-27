@@ -113,6 +113,84 @@
     'Verify return code: 0 (ok)' not in
     (lam_ldaps_test.stdout ~ lam_ldaps_test.stderr)
 
+
+- name: Valider le profil utilisateur LAM versionné
+  ansible.builtin.assert:
+    that:
+      - >-
+        'inetOrgPerson_mail: $user@edusmart.lan'
+        in lookup(
+          'ansible.builtin.file',
+          role_path + '/files/profiles/default.user'
+        )
+      - >-
+        'posixAccount_homeDirectory: /home/$user'
+        in lookup(
+          'ansible.builtin.file',
+          role_path + '/files/profiles/default.user'
+        )
+    fail_msg: >-
+      Le profil LAM versionné ne contient pas les valeurs automatiques
+      attendues pour l'adresse mail ou le répertoire personnel.
+
+- name: Déployer le profil utilisateur LAM sur l'hôte Docker
+  ansible.builtin.copy:
+    src: profiles/default.user
+    dest: "{{ lam_stack_path }}/default.user"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Installer le profil utilisateur par défaut dans LAM
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    container="{{ lam_container_name }}"
+    source_file="{{ lam_stack_path }}/default.user"
+    target_directory="/var/lib/ldap-account-manager/config/profiles/{{ lam_server_profile }}"
+    target_file="${target_directory}/default.user"
+    backup_file="${target_file}.ansible-backup"
+
+    docker exec "$container" mkdir -p "$target_directory"
+
+    source_sha="$(sha256sum "$source_file" | awk '{print $1}')"
+    target_sha="$(
+      docker exec "$container" sha256sum "$target_file" 2>/dev/null |
+      awk '{print $1}' || true
+    )"
+
+    if [ "$source_sha" = "$target_sha" ]; then
+      echo "PROFILE_OK"
+      exit 0
+    fi
+
+    metadata="$(
+      docker exec "$container" stat -c '%u:%g:%a' "$target_file" 2>/dev/null ||
+      echo '33:33:640'
+    )"
+
+    if docker exec "$container" test -f "$target_file"; then
+      docker exec "$container" cp -a "$target_file" "$backup_file"
+    fi
+
+    docker cp "$source_file" "$container:$target_file"
+
+    owner_uid="${metadata%%:*}"
+    remaining="${metadata#*:}"
+    owner_gid="${remaining%%:*}"
+    file_mode="${remaining##*:}"
+
+    docker exec "$container" chown "$owner_uid:$owner_gid" "$target_file"
+    docker exec "$container" chmod "$file_mode" "$target_file"
+
+    echo "PROFILE_UPDATED"
+  args:
+    executable: /bin/bash
+  register: lam_default_profile_install
+  changed_when: "'PROFILE_UPDATED' in lam_default_profile_install.stdout"
+  when: not ansible_check_mode
+
 - name: Afficher l'état de LAM
   ansible.builtin.command:
     cmd: docker compose --env-file .env -f compose.yml ps
