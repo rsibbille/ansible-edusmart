@@ -6,6 +6,85 @@
     owner: root
     group: root
     mode: "0755"
+  check_mode: false
+
+- name: Vérifier la présence de l’unité ssh.socket
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files ssh.socket --no-legend
+  register: ssh_socket_unit
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Relever l’état initial de ssh.socket
+  ansible.builtin.command:
+    cmd: systemctl is-active ssh.socket
+  register: ssh_socket_initial_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: "'ssh.socket' in ssh_socket_unit.stdout"
+
+- name: Relever l’activation initiale de ssh.socket
+  ansible.builtin.command:
+    cmd: systemctl is-enabled ssh.socket
+  register: ssh_socket_initial_enabled
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: "'ssh.socket' in ssh_socket_unit.stdout"
+
+- name: Basculer OpenSSH vers le service classique
+  when: "'ssh.socket' in ssh_socket_unit.stdout"
+  block:
+    - name: Désactiver l’activation SSH par socket
+      ansible.builtin.systemd_service:
+        name: ssh.socket
+        state: stopped
+        enabled: false
+
+    - name: Garantir le répertoire d’exécution OpenSSH
+      ansible.builtin.file:
+        path: /run/sshd
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Activer le service SSH classique
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        state: started
+        enabled: true
+
+    - name: Vérifier la configuration SSH après bascule
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+      check_mode: false
+
+  rescue:
+    - name: Recréer le répertoire d’exécution après échec
+      ansible.builtin.file:
+        path: /run/sshd
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Restaurer ssh.socket lorsqu’il était précédemment actif
+      ansible.builtin.systemd_service:
+        name: ssh.socket
+        state: started
+        enabled: true
+      when:
+        - ssh_socket_initial_active.rc == 0 or ssh_socket_initial_enabled.rc == 0
+
+    - name: Signaler l’échec de la bascule OpenSSH
+      ansible.builtin.fail:
+        msg: >-
+          La bascule de ssh.socket vers ssh.service a échoué.
+          L’état initial de ssh.socket a été restauré lorsqu’il était actif ou activé.
 
 - name: Appliquer le durcissement SSH EduSmart
   ansible.builtin.blockinfile:

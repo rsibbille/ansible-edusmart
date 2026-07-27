@@ -3,6 +3,8 @@ ssh_allowed_users:
   - eds_admin
   - svc_ansible
   - r.sibbille
+  - p.feret
+  - n.sokri
   - s.mousset
 
 ssh_denied_users:

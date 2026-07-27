@@ -1,15 +1,32 @@
 ---
-- name: Déployer les accès administratifs Linux EduSmart
+- name: Déployer les accès administratifs Linux nominatifs EduSmart
   hosts: "{{ target_hosts | default('ansible_controllers:linux_servers') }}"
   become: true
   gather_facts: false
 
   vars:
     linux_admin_group: eds_admins
-    linux_admin_user: eds_admin
 
-    linux_admin_public_keys:
-      - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/eds_admin.pub') }}"
+    linux_admin_users:
+      - name: r.sibbille
+        comment: Ruben Sibbille - Administrateur Linux EduSmart
+        public_keys:
+          - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/r.sibbille.pub') }}"
+
+      - name: p.feret
+        comment: Pierre Feret - Administrateur Linux EduSmart
+        public_keys:
+          - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/p.feret.pub') }}"
+
+      - name: n.sokri
+        comment: Nesly Sokri - Administrateur Linux EduSmart
+        public_keys:
+          - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/n.sokri.pub') }}"
+
+      - name: s.mousset
+        comment: Sacha Mousset - Administrateur Linux EduSmart
+        public_keys:
+          - "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/authorized_keys/s.mousset.pub') }}"
 
   tasks:
     - name: Créer le groupe des administrateurs Linux EduSmart
@@ -17,10 +34,10 @@
         name: "{{ linux_admin_group }}"
         state: present
 
-    - name: Créer le compte administrateur EduSmart
+    - name: Créer les comptes administrateurs nominatifs
       ansible.builtin.user:
-        name: "{{ linux_admin_user }}"
-        comment: Administrateur Linux EduSmart
+        name: "{{ item.name }}"
+        comment: "{{ item.comment }}"
         shell: /bin/bash
         create_home: true
         groups:
@@ -28,14 +45,20 @@
         append: true
         password_lock: true
         state: present
+      loop: "{{ linux_admin_users }}"
+      loop_control:
+        label: "{{ item.name }}"
 
-    - name: Déployer les clés SSH administratives autorisées
+    - name: Déployer la clé SSH propre à chaque administrateur
       ansible.posix.authorized_key:
-        user: "{{ linux_admin_user }}"
-        key: "{{ linux_admin_public_keys | join('\n') }}"
+        user: "{{ item.name }}"
+        key: "{{ item.public_keys | join('\n') }}"
         state: present
         manage_dir: true
-        exclusive: false
+        exclusive: true
+      loop: "{{ linux_admin_users }}"
+      loop_control:
+        label: "{{ item.name }}"
 
     - name: Autoriser le groupe EduSmart à utiliser sudo
       ansible.builtin.copy:
@@ -47,12 +70,18 @@
           %{{ linux_admin_group }} ALL=(ALL:ALL) NOPASSWD: ALL
         validate: "/usr/sbin/visudo -cf %s"
 
-    - name: Vérifier que le compte administrateur existe
+    - name: Vérifier les comptes administrateurs
       ansible.builtin.command:
-        cmd: "id {{ linux_admin_user }}"
+        cmd: "id {{ item.name }}"
+      loop: "{{ linux_admin_users }}"
+      loop_control:
+        label: "{{ item.name }}"
       changed_when: false
 
-    - name: Vérifier les privilèges sudo du compte administrateur
+    - name: Vérifier les privilèges sudo
       ansible.builtin.command:
-        cmd: "sudo -l -U {{ linux_admin_user }}"
+        cmd: "sudo -l -U {{ item.name }}"
+      loop: "{{ linux_admin_users }}"
+      loop_control:
+        label: "{{ item.name }}"
       changed_when: false
