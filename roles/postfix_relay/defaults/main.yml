@@ -13,3 +13,8 @@ postfix_mynetworks:
   - 10.10.20.23/32
 
 postfix_message_size_limit: 10485760
+
+# Routage du domaine de messagerie interne
+postfix_internal_mail_domain: edusmart.lan
+postfix_internal_mail_server: 10.10.20.23
+postfix_internal_mail_port: 25

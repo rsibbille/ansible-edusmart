@@ -12,6 +12,9 @@ mydestination = $myhostname, localhost.$mydomain, localhost
 # Smarthost Gmail authentifié
 relayhost = [{{ postfix_relayhost }}]:{{ postfix_relayport }}
 
+# Routage spécifique du domaine de messagerie interne
+transport_maps = hash:/etc/postfix/transport
+
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
 smtp_sasl_security_options = noanonymous

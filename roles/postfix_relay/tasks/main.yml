@@ -62,6 +62,43 @@
     group: root
     mode: "0600"
 
+- name: Déployer la table de transport du domaine interne
+  ansible.builtin.template:
+    src: transport.j2
+    dest: /etc/postfix/transport
+    owner: root
+    group: root
+    mode: "0644"
+  register: postfix_transport_map
+  notify: Redémarrer Postfix
+
+- name: Vérifier la présence de la base de transport Postfix
+  ansible.builtin.stat:
+    path: /etc/postfix/transport.db
+  register: postfix_transport_database
+
+- name: Générer la base de transport Postfix
+  ansible.builtin.command:
+    cmd: postmap /etc/postfix/transport
+  when: postfix_transport_map.changed or not postfix_transport_database.stat.exists
+  notify: Redémarrer Postfix
+
+- name: Protéger la base de transport Postfix
+  ansible.builtin.file:
+    path: /etc/postfix/transport.db
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Vérifier le routage du domaine interne
+  ansible.builtin.command:
+    cmd: postmap -q {{ postfix_internal_mail_domain }} hash:/etc/postfix/transport
+  register: postfix_internal_transport
+  changed_when: false
+  failed_when:
+    - postfix_internal_transport.rc != 0
+    - postfix_internal_transport.stdout != "smtp:[" ~ postfix_internal_mail_server ~ "]:" ~ (postfix_internal_mail_port | string)
+
 - name: Déployer la configuration Postfix
   ansible.builtin.template:
     src: main.cf.j2
