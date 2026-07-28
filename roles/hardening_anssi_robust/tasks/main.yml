@@ -11,6 +11,20 @@
     - always
     - anssi_preflight
 
+- name: Refuser les options génériques volontairement non implémentées
+  ansible.builtin.assert:
+    that:
+      - not anssi_fix_world_writable_files | bool
+      - not anssi_enable_host_firewall | bool
+    fail_msg: >-
+      La correction récursive des fichiers world-writable et le pare-feu local
+      générique sont volontairement refusés avant toute modification. Utiliser le
+      rapport d'audit pour corriger au cas par cas et créer des règles nftables
+      propres à chaque groupe de services.
+  tags:
+    - always
+    - anssi_preflight
+
 - name: Identifier les mesures potentiellement disruptives demandées
   ansible.builtin.set_fact:
     anssi_disruptive_changes_requested: >-
@@ -243,6 +257,26 @@
   tags:
     - anssi_sudo
 
+- name: Borner la taille du journal sudo
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/anssi-sudo
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /var/log/sudo.log {
+          weekly
+          rotate 12
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0600 root root
+      }
+  when: anssi_manage_sudo | bool
+  tags:
+    - anssi_sudo
+
 - name: Définir l'UMASK par défaut
   ansible.builtin.lineinfile:
     path: /etc/login.defs
@@ -330,26 +364,3 @@
   when: anssi_generate_filesystem_audit | bool
   tags:
     - anssi_audit
-
-- name: Refuser la correction globale des fichiers world-writable
-  ansible.builtin.fail:
-    msg: >-
-      anssi_fix_world_writable_files=true n'est volontairement pas implémenté :
-      retirer o+w récursivement sur / peut casser des applications, des sockets,
-      des répertoires de dépôt ou des paquets. Corriger au cas par cas à partir du
-      rapport /var/log/anssi-hardening/filesystem-audit.txt.
-  when: anssi_fix_world_writable_files | bool
-  tags:
-    - anssi_audit
-    - anssi_disruptive
-
-- name: Refuser l'activation générique d'un pare-feu local
-  ansible.builtin.fail:
-    msg: >-
-      anssi_enable_host_firewall=true n'est pas implémenté dans le rôle générique.
-      Les règles doivent être définies par groupe de service et coordonnées avec
-      OPNsense, Docker/nftables, NFS, LDAP/DNS, SMTP et Teleport avant activation.
-  when: anssi_enable_host_firewall | bool
-  tags:
-    - anssi_firewall
-    - anssi_disruptive
