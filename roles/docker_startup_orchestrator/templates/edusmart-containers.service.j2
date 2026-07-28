@@ -1,0 +1,15 @@
+[Unit]
+Description=Démarrage ordonné des conteneurs EduSmart
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart={{ docker_startup_script_path }}
+RemainAfterExit=yes
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target docker.service

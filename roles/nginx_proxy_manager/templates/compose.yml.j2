@@ -5,7 +5,7 @@ services:
   npm:
     image: jc21/nginx-proxy-manager:{{ npm_version }}
     container_name: nginx-proxy-manager
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
 
     environment:
       TZ: Europe/Paris

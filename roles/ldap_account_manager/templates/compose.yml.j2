@@ -5,7 +5,7 @@ services:
   lam:
     image: "{{ lam_image }}"
     container_name: "{{ lam_container_name }}"
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
 
     environment:
       TZ: "{{ lam_timezone }}"

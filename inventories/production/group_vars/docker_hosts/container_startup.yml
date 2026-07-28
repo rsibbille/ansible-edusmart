@@ -1,0 +1,47 @@
+---
+docker_container_restart_policy: "on-failure:5"
+
+docker_startup_script_path: /usr/local/sbin/start-edusmart-containers
+docker_startup_service_name: edusmart-containers.service
+
+docker_startup_wait_timeout: 300
+docker_startup_inter_group_delay: 10
+
+docker_startup_required_containers:
+  - grafana-postgres
+  - passbolt-db
+  - nginx-proxy-manager
+  - node-exporter
+  - cadvisor
+  - prometheus
+  - alertmanager
+  - grafana
+  - passbolt
+  - ldap-account-manager
+
+docker_startup_groups:
+  - label: "Étape 1 : bases de données"
+    containers:
+      - grafana-postgres
+      - passbolt-db
+
+  - label: "Étape 2 : proxy et exporters"
+    containers:
+      - nginx-proxy-manager
+      - node-exporter
+      - cadvisor
+
+  - label: "Étape 3 : supervision"
+    containers:
+      - prometheus
+      - alertmanager
+
+  - label: "Étape 4 : applications"
+    containers:
+      - grafana
+      - passbolt
+      - ldap-account-manager
+
+# Passbolt n'est pas encore entièrement déployé par un rôle Ansible.
+docker_startup_unmanaged_compose_files:
+  - /opt/edusmart/stacks/passbolt/compose.yml

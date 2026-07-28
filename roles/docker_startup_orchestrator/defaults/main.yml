@@ -1,0 +1,12 @@
+---
+docker_container_restart_policy: "on-failure:5"
+
+docker_startup_script_path: /usr/local/sbin/start-edusmart-containers
+docker_startup_service_name: edusmart-containers.service
+
+docker_startup_wait_timeout: 300
+docker_startup_inter_group_delay: 10
+
+docker_startup_required_containers: []
+docker_startup_groups: []
+docker_startup_unmanaged_compose_files: []

@@ -1,0 +1,9 @@
+---
+- name: Configurer le démarrage ordonné des conteneurs EduSmart
+  hosts: docker_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+
+  roles:
+    - role: docker_startup_orchestrator

@@ -1,0 +1,134 @@
+---
+- name: Vérifier la disponibilité du client Docker
+  ansible.builtin.command:
+    argv:
+      - docker
+      - version
+      - --format
+      - "{% raw %}{{.Server.Version}}{% endraw %}"
+  register: docker_server_version
+  changed_when: false
+  check_mode: false
+
+- name: Vérifier la présence des conteneurs attendus
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - "{{ item }}"
+  loop: "{{ docker_startup_required_containers }}"
+  loop_control:
+    label: "{{ item }}"
+  changed_when: false
+  check_mode: false
+
+- name: Lire les politiques de redémarrage actuelles
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format
+      - "{% raw %}{{.HostConfig.RestartPolicy.Name}}:{{.HostConfig.RestartPolicy.MaximumRetryCount}}{% endraw %}"
+      - "{{ item }}"
+  loop: "{{ docker_startup_required_containers }}"
+  loop_control:
+    label: "{{ item }}"
+  register: docker_restart_policies
+  changed_when: false
+  check_mode: false
+
+- name: Appliquer la politique de redémarrage aux conteneurs existants
+  ansible.builtin.command:
+    argv:
+      - docker
+      - update
+      - --restart
+      - "{{ docker_container_restart_policy }}"
+      - "{{ item.item }}"
+  loop: "{{ docker_restart_policies.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not ansible_check_mode
+    - item.stdout | trim != docker_container_restart_policy
+
+- name: Vérifier les fichiers Compose non entièrement gérés par Ansible
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ docker_startup_unmanaged_compose_files }}"
+  register: unmanaged_compose_stats
+
+- name: Persister la politique dans les fichiers Compose non gérés
+  ansible.builtin.replace:
+    path: "{{ item.item }}"
+    regexp: '^([ \t]*restart:[ \t]*).*$'
+    replace: '\1"{{ docker_container_restart_policy }}"'
+  loop: "{{ unmanaged_compose_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+
+- name: Valider les fichiers Compose non gérés
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ item.item }}"
+      - config
+      - --quiet
+  loop: "{{ unmanaged_compose_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+  changed_when: false
+  check_mode: false
+
+- name: Déployer le script de démarrage ordonné
+  ansible.builtin.template:
+    src: start-edusmart-containers.sh.j2
+    dest: "{{ docker_startup_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Valider la syntaxe du script de démarrage
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/bash
+      - -n
+      - "{{ docker_startup_script_path }}"
+  changed_when: false
+  check_mode: false
+
+- name: Déployer l'unité systemd d'orchestration
+  ansible.builtin.template:
+    src: edusmart-containers.service.j2
+    dest: "/etc/systemd/system/{{ docker_startup_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: docker_startup_unit
+
+- name: Recharger systemd après modification de l'unité
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: docker_startup_unit.changed
+
+- name: Recréer les liens d'activation de l'orchestrateur
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reenable
+      - "{{ docker_startup_service_name }}"
+  when:
+    - docker_startup_unit.changed
+    - not ansible_check_mode
+  changed_when: true
+
+- name: Activer l'orchestrateur sans redémarrer les conteneurs actifs
+  ansible.builtin.systemd_service:
+    name: "{{ docker_startup_service_name }}"
+    daemon_reload: true
+    enabled: true
+    state: started

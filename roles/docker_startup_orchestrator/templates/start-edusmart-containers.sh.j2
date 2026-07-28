@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+log() {
+  printf '[%s] %s\n' "$(date '+%F %T')" "$*"
+}
+
+container_state() {
+  docker inspect \
+    --format '{% raw %}{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}{% endraw %}' \
+    "$1"
+}
+
+ensure_started() {
+  local container="$1"
+
+  if ! docker inspect "$container" >/dev/null 2>&1; then
+    log "ERREUR : conteneur absent : $container"
+    return 1
+  fi
+
+  if [ "$(docker inspect --format '{% raw %}{{.State.Running}}{% endraw %}' "$container")" != "true" ]; then
+    log "Démarrage de $container"
+    docker start "$container" >/dev/null
+  else
+    log "$container est déjà démarré"
+  fi
+}
+
+wait_ready() {
+  local container="$1"
+  local timeout="{{ docker_startup_wait_timeout }}"
+  local elapsed=0
+  local state=""
+
+  while [ "$elapsed" -lt "$timeout" ]; do
+    state="$(container_state "$container" 2>/dev/null || true)"
+
+    case "$state" in
+      healthy|running)
+        log "$container prêt : $state"
+        return 0
+        ;;
+      unhealthy|exited|dead)
+        log "ERREUR : $container est dans l’état $state"
+        return 1
+        ;;
+    esac
+
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+
+  log "ERREUR : délai dépassé pour $container, dernier état : $state"
+  return 1
+}
+
+start_group() {
+  local container
+
+  for container in "$@"; do
+    ensure_started "$container"
+  done
+
+  for container in "$@"; do
+    wait_ready "$container"
+  done
+}
+
+{% for group in docker_startup_groups %}
+log "{{ group.label }}"
+start_group {{ group.containers | join(' ') }}
+{% if not loop.last %}
+
+sleep {{ docker_startup_inter_group_delay }}
+{% endif %}
+
+{% endfor %}
+log "Démarrage EduSmart terminé"
+
+docker ps \
+  --format 'table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}'

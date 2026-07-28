@@ -5,7 +5,7 @@ services:
   prometheus:
     image: quay.io/prometheus/prometheus:{{ prometheus_version }}
     container_name: prometheus
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -29,7 +29,7 @@ services:
   grafana-db:
     image: postgres:{{ grafana_postgres_version }}
     container_name: grafana-postgres
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     environment:
       POSTGRES_DB: grafana
       POSTGRES_USER: grafana
@@ -52,7 +52,7 @@ services:
   grafana:
     image: grafana/grafana:{{ grafana_version }}
     container_name: grafana
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     environment:
       GF_SECURITY_ADMIN_USER: eds_admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -91,7 +91,7 @@ services:
   alertmanager:
     image: quay.io/prometheus/alertmanager:{{ alertmanager_version }}
     container_name: alertmanager
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
@@ -106,7 +106,7 @@ services:
   node-exporter:
     image: quay.io/prometheus/node-exporter:{{ node_exporter_version }}
     container_name: node-exporter
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     command:
       - --path.rootfs=/host
     pid: host
@@ -121,7 +121,7 @@ services:
   cadvisor:
     image: ghcr.io/google/cadvisor:{{ cadvisor_version }}
     container_name: cadvisor
-    restart: unless-stopped
+    restart: "{{ docker_container_restart_policy }}"
     privileged: true
     devices:
       - /dev/kmsg:/dev/kmsg
