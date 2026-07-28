@@ -50,7 +50,7 @@
     label: "{{ item.item }}"
   when:
     - not ansible_check_mode
-    - item.stdout | trim != docker_container_restart_policy
+    - item.stdout | trim != docker_container_restart_policy_inspect
 
 - name: Vérifier les fichiers Compose non entièrement gérés par Ansible
   ansible.builtin.stat:

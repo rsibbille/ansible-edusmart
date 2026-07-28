@@ -1,5 +1,6 @@
 ---
-docker_container_restart_policy: "on-failure:5"
+docker_container_restart_policy: "no"
+docker_container_restart_policy_inspect: "no:0"
 
 docker_startup_script_path: /usr/local/sbin/start-edusmart-containers
 docker_startup_service_name: edusmart-containers.service
