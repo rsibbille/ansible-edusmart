@@ -1,0 +1,69 @@
+# Managed by Ansible - EduSmart ANSSI robust profile
+# ANSSI-BP-028 v2.0 - applicable runtime controls only
+
+kernel.randomize_va_space = 2
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.yama.ptrace_scope = 1
+fs.suid_dumpable = 0
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+fs.protected_fifos = 2
+fs.protected_regular = 2
+
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_rfc1337 = 1
+
+{% if anssi_manage_rp_filter | bool %}
+# ATTENTION : le mode strict peut casser le routage asymétrique, les machines
+# multi-homées, certains VPN et certains réseaux de conteneurs.
+net.ipv4.conf.all.rp_filter = {{ anssi_rp_filter_mode }}
+net.ipv4.conf.default.rp_filter = {{ anssi_rp_filter_mode }}
+{% endif %}
+
+{% if anssi_manage_ipv4_forwarding | bool %}
+# ATTENTION : Docker, un routeur, un VPN subnet-router ou un hyperviseur peut
+# nécessiter ip_forward=1.
+net.ipv4.ip_forward = {{ 1 if anssi_ipv4_forwarding | bool else 0 }}
+{% endif %}
+
+{% if anssi_disable_ipv6 | bool %}
+# Appliquer uniquement après validation qu'aucun service, DNS, VPN ou conteneur
+# ne dépend d'IPv6.
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+{% else %}
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
+{% endif %}
+
+{% if anssi_disable_unprivileged_userns | bool %}
+# Peut casser les conteneurs rootless, les sandbox applicatives et certains
+# outils de développement.
+kernel.unprivileged_userns_clone = 0
+{% endif %}
+
+{% if anssi_disable_kexec | bool %}
+# Irréversible jusqu'au prochain redémarrage et incompatible avec kexec.
+kernel.kexec_load_disabled = 1
+{% endif %}
+
+{% if anssi_disable_kernel_module_loading | bool %}
+# IRRÉVERSIBLE jusqu'au redémarrage. Peut empêcher Docker, NFS, stockage,
+# pare-feu ou pilotes de charger un module requis.
+kernel.modules_disabled = 1
+{% endif %}
