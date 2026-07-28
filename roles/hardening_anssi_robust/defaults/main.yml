@@ -1,0 +1,74 @@
+---
+# Profil cumulatif ANSSI : minimal + intermédiaire + renforcé, limité aux
+# recommandations applicables à un serveur Debian déjà installé.
+anssi_hardening_level: robust
+anssi_supported_debian_majors:
+  - "12"
+  - "13"
+
+# Aucun apt full-upgrade, autoremove ou redémarrage n'est lancé par ce rôle.
+anssi_security_packages:
+  - aide
+  - aide-common
+  - apparmor
+  - apparmor-utils
+  - auditd
+  - audispd-plugins
+  - debian-security-support
+  - debsums
+  - needrestart
+
+anssi_manage_sysctl: true
+anssi_manage_auditd: true
+anssi_manage_journald: true
+anssi_manage_apparmor: true
+anssi_manage_aide: true
+anssi_manage_sudo: true
+anssi_manage_login_defaults: true
+anssi_generate_filesystem_audit: true
+
+# AIDE est installé mais l'initialisation peut être longue. Elle est activée par
+# défaut pour le profil robuste et reste idempotente grâce à creates.
+anssi_aide_initialize: true
+
+# Profils AppArmor à basculer explicitement en enforce après observation en
+# complain. Ne jamais utiliser /etc/apparmor.d/* comme liste globale.
+anssi_apparmor_enforce_profiles: []
+
+# Paramètres de journalisation dimensionnés pour la petite maquette EduSmart.
+anssi_journald_system_max_use: 512M
+anssi_journald_runtime_max_use: 128M
+anssi_journald_max_file_sec: 1month
+anssi_audit_backlog_limit: 8192
+anssi_audit_num_logs: 10
+anssi_audit_max_log_file_mb: 50
+anssi_audit_immutable: false
+anssi_audit_all_execve: false
+
+# Sudo : les options incompatibles avec Ansible ou susceptibles de capturer des
+# secrets restent désactivées par défaut.
+anssi_sudo_use_pty: true
+anssi_sudo_requiretty: false
+anssi_sudo_noexec: false
+anssi_sudo_iolog: false
+anssi_sudo_timestamp_timeout_minutes: 5
+anssi_default_umask: "027"
+anssi_shell_timeout_seconds: 900
+
+# Mesures dépendantes de l'architecture. Elles ne sont jamais imposées
+# globalement sur Docker, Teleport, LDAP/BIND, SMTP ou l'hôte KVM.
+anssi_disable_ipv6: false
+anssi_manage_rp_filter: false
+anssi_rp_filter_mode: 1
+anssi_manage_ipv4_forwarding: false
+anssi_ipv4_forwarding: false
+anssi_disable_unprivileged_userns: false
+anssi_disable_kexec: false
+anssi_disable_kernel_module_loading: false
+anssi_blacklist_kernel_modules: []
+anssi_disable_services: []
+anssi_fix_world_writable_files: false
+anssi_enable_host_firewall: false
+
+# Obligatoire pour activer une mesure marquée disruptive ci-dessus.
+anssi_acknowledge_disruptive_changes: false
