@@ -1,0 +1,9 @@
+# Managed by Ansible - EduSmart ANSSI robust profile
+[Journal]
+Storage=persistent
+Compress=yes
+Seal=yes
+ForwardToSyslog=yes
+SystemMaxUse={{ anssi_journald_system_max_use }}
+RuntimeMaxUse={{ anssi_journald_runtime_max_use }}
+MaxFileSec={{ anssi_journald_max_file_sec }}
