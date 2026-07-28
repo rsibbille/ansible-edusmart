@@ -1,7 +1,7 @@
 ---
 # Profil cumulatif ANSSI : minimal + intermédiaire + renforcé, limité aux
 # recommandations applicables à un serveur Debian déjà installé.
-anssi_hardening_level: robust
+anssi_hardening_level: reinforced
 anssi_supported_debian_majors:
   - "12"
   - "13"
