@@ -1,0 +1,6 @@
+---
+monitoring_alert_smtp_smarthost: "10.10.20.24:25"
+monitoring_alert_email_to: "{{ vault_monitoring_alert_email_to }}"
+monitoring_alert_group_wait: "10s"
+monitoring_alert_group_interval: "5m"
+monitoring_alert_repeat_interval: "4h"

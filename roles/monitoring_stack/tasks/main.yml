@@ -21,6 +21,7 @@
     - "{{ monitoring_stack_path }}/prometheus/rules"
     - "{{ monitoring_stack_path }}/alertmanager"
     - "{{ monitoring_stack_path }}/grafana"
+    - "{{ monitoring_stack_path }}/grafana/certificates"
     - "{{ monitoring_stack_path }}/grafana/provisioning"
     - "{{ monitoring_stack_path }}/grafana/provisioning/datasources"
     - "{{ monitoring_stack_path }}/grafana/provisioning/plugins"
@@ -39,6 +40,22 @@
     cmd: docker network create edusmart_proxy
   when: proxy_network.rc != 0
 
+- name: Installer la CA EduSmart pour Grafana
+  ansible.builtin.copy:
+    src: edusmart-root-ca.crt
+    dest: "{{ monitoring_stack_path }}/grafana/certificates/edusmart-root-ca.crt"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Déployer la configuration LDAP Grafana
+  ansible.builtin.template:
+    src: grafana-ldap.toml.j2
+    dest: "{{ monitoring_stack_path }}/grafana/ldap.toml"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Déployer le fichier Compose
   ansible.builtin.template:
     src: compose.yml.j2
@@ -54,6 +71,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Recréer Prometheus
 
 - name: Déployer les règles Prometheus
   ansible.builtin.template:
@@ -70,6 +88,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: alertmanager_configuration
 
 - name: Déployer la source Prometheus de Grafana
   ansible.builtin.template:
@@ -106,6 +125,107 @@
     'Recreated' in monitoring_compose.stderr or
     'Started' in monitoring_compose.stderr or
     'Pulled' in monitoring_compose.stderr
+
+- name: Calculer l'empreinte de la configuration Alertmanager sur l'hôte
+  ansible.builtin.stat:
+    path: "{{ monitoring_stack_path }}/alertmanager/alertmanager.yml"
+    checksum_algorithm: sha256
+  register: alertmanager_host_configuration
+
+- name: Lire l'empreinte de la configuration montée dans Alertmanager
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - alertmanager
+      - sha256sum
+      - /etc/alertmanager/alertmanager.yml
+  register: alertmanager_container_configuration
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Déterminer si Alertmanager doit être recréé
+  ansible.builtin.set_fact:
+    alertmanager_recreate_required: >-
+      {{
+        (alertmanager_configuration.changed | default(false))
+        or (alertmanager_container_configuration.rc | default(1) != 0)
+        or (
+          alertmanager_host_configuration.stat.checksum
+          not in (alertmanager_container_configuration.stdout | default(''))
+        )
+      }}
+  when: not ansible_check_mode
+
+- name: Recréer Alertmanager si la configuration montée est obsolète
+  ansible.builtin.command:
+    cmd: >-
+      docker compose --env-file .env -f compose.yml
+      up -d --no-deps --force-recreate alertmanager
+    chdir: "{{ monitoring_stack_path }}"
+  when:
+    - not ansible_check_mode
+    - alertmanager_recreate_required | bool
+  changed_when: true
+
+- name: Valider la syntaxe de la configuration Alertmanager active
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - alertmanager
+      - amtool
+      - check-config
+      - /etc/alertmanager/alertmanager.yml
+  register: alertmanager_config_check
+  changed_when: false
+  retries: 10
+  delay: 2
+  until: alertmanager_config_check.rc == 0
+  when: not ansible_check_mode
+
+- name: Lire la configuration chargée par Alertmanager
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - alertmanager
+      - amtool
+      - --alertmanager.url=http://127.0.0.1:9093
+      - config
+      - show
+  register: alertmanager_loaded_configuration
+  changed_when: false
+  retries: 10
+  delay: 2
+  until: alertmanager_loaded_configuration.rc == 0
+  when: not ansible_check_mode
+
+- name: Vérifier la configuration SMTP chargée
+  ansible.builtin.assert:
+    that:
+      - monitoring_alert_smtp_smarthost in alertmanager_loaded_configuration.stdout
+      - monitoring_alert_email_to in alertmanager_loaded_configuration.stdout
+      - vault_postfix_smtp_username in alertmanager_loaded_configuration.stdout
+    fail_msg: >-
+      Alertmanager n'a pas chargé le relais SMTP, l'expéditeur ou
+      le destinataire configuré par Ansible.
+  when: not ansible_check_mode
+  no_log: true
+
+- name: Valider la configuration Prometheus
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      --entrypoint /bin/promtool
+      -v {{ monitoring_stack_path }}/prometheus:/etc/prometheus:ro
+      quay.io/prometheus/prometheus:{{ prometheus_version }}
+      check config /etc/prometheus/prometheus.yml
+  changed_when: false
+
+- name: Exécuter les handlers avant les contrôles de santé
+  ansible.builtin.meta: flush_handlers
 
 - name: Attendre Prometheus
   ansible.builtin.uri:

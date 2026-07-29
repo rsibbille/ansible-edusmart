@@ -58,6 +58,16 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_LDAP_ENABLED: "true"
+      GF_AUTH_LDAP_CONFIG_FILE: /etc/grafana/ldap.toml
+      GF_AUTH_LDAP_ALLOW_SIGN_UP: "true"
+      GF_SERVER_ROOT_URL: "https://grafana.edusmart.lan/"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SERVER_DOMAIN: "grafana.edusmart.lan"
+      GF_LIVE_ALLOWED_ORIGINS: "https://grafana.edusmart.lan"
+      GF_SERVER_PROTOCOL: "http"
+      GF_SECURITY_CSRF_TRUSTED_ORIGINS: "https://grafana.edusmart.lan"
+      GF_SECURITY_CSRF_ADDITIONAL_HEADERS: "X-Forwarded-Host X-Forwarded-Proto"
 
       GF_DATABASE_TYPE: postgres
       GF_DATABASE_HOST: grafana-db:5432
@@ -71,6 +81,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/ldap.toml:/etc/grafana/ldap.toml:ro
+      - ./grafana/certificates/edusmart-root-ca.crt:/etc/grafana/certificates/edusmart-root-ca.crt:ro
 
     ports:
       - "{{ monitoring_bind_ip }}:3000:3000"

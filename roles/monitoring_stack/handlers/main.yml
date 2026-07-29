@@ -1,0 +1,9 @@
+---
+
+- name: Recréer Prometheus
+  ansible.builtin.command:
+    cmd: >-
+      docker compose --env-file .env -f compose.yml
+      up -d --no-deps --force-recreate prometheus
+    chdir: "{{ monitoring_stack_path }}"
+  changed_when: true

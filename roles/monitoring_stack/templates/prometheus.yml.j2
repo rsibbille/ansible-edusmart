@@ -17,13 +17,32 @@ scrape_configs:
     static_configs:
       - targets:
           - prometheus:9090
+        labels:
+          instance: srv-prd-par-dkr-001
 
-  - job_name: node-exporter
+  - job_name: docker-host
     static_configs:
       - targets:
           - node-exporter:9100
+        labels:
+          instance: srv-prd-par-dkr-001
 
   - job_name: cadvisor
     static_configs:
       - targets:
           - cadvisor:8080
+        labels:
+          instance: srv-prd-par-dkr-001
+
+  - job_name: linux-servers
+    static_configs:
+{% set monitored_hosts = groups.get('linux_servers', []) + groups.get('ansible_controllers', []) %}
+{% for hostname in monitored_hosts | unique | sort %}
+{% if hostname not in groups.get('docker_hosts', []) %}
+      - targets:
+          - "{{ hostvars[hostname].ansible_host }}:9100"
+        labels:
+          instance: "{{ hostname }}"
+          environment: production
+{% endif %}
+{% endfor %}

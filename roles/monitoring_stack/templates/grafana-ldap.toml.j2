@@ -1,0 +1,37 @@
+# Configuration gérée par Ansible - EduSmart
+
+[[servers]]
+host = "srv-prd-par-idm-001.edusmart.lan srv-prd-par-idm-002.edusmart.lan"
+port = 636
+
+use_ssl = true
+start_tls = false
+ssl_skip_verify = false
+root_ca_cert = "/etc/grafana/certificates/edusmart-root-ca.crt"
+min_tls_version = "TLS1.2"
+
+# Authentification directe avec le DN de l'utilisateur.
+# Aucun mot de passe administrateur LDAP n'est stocké dans Grafana.
+bind_dn = "uid=%s,ou=People,dc=edusmart,dc=lan"
+
+timeout = 10
+search_filter = "(uid=%s)"
+search_base_dns = ["ou=People,dc=edusmart,dc=lan"]
+
+# Schéma POSIX OpenLDAP.
+group_search_filter = "(&(objectClass=posixGroup)(memberUid=%s))"
+group_search_filter_user_attribute = "uid"
+group_search_base_dns = ["ou=Groups,dc=edusmart,dc=lan"]
+
+[servers.attributes]
+name = "givenName"
+surname = "sn"
+username = "uid"
+member_of = "memberOf"
+email = "mail"
+
+# Pour la démonstration, tout utilisateur LDAP valide est Viewer.
+# Le compte local eds_admin reste le compte d'administration.
+[[servers.group_mappings]]
+group_dn = "*"
+org_role = "Viewer"

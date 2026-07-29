@@ -1,0 +1,20 @@
+---
+- name: Déployer Node Exporter sur les serveurs Linux de production
+  hosts: "linux_servers:ansible_controllers:!docker_hosts"
+  serial: 1
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: node_exporter_host
+
+- name: Mettre à jour Prometheus et la stack de supervision
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../inventories/production/vault/smtp.yml
+
+  roles:
+    - role: monitoring_stack
