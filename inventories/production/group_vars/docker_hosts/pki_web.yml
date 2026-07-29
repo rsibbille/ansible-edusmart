@@ -1,0 +1,21 @@
+---
+web_tls_common_name: grafana.edusmart.lan
+
+web_tls_subject_alt_names:
+  - DNS:grafana.edusmart.lan
+  - DNS:lam.edusmart.lan
+  - DNS:passbolt.edusmart.lan
+  - DNS:npm.edusmart.lan
+  - IP:10.10.50.11
+
+web_tls_verify_names:
+  - grafana.edusmart.lan
+  - lam.edusmart.lan
+  - passbolt.edusmart.lan
+  - npm.edusmart.lan
+
+web_tls_directory: /opt/edusmart/stacks/nginx-proxy-manager/certificates
+web_tls_private_key_path: "{{ web_tls_directory }}/edusmart-web-services.key"
+web_tls_certificate_path: "{{ web_tls_directory }}/edusmart-web-services.crt"
+web_tls_ca_certificate_path: "{{ web_tls_directory }}/edusmart-root-ca.crt"
+web_tls_fullchain_path: "{{ web_tls_directory }}/edusmart-web-services-fullchain.pem"

@@ -1,0 +1,46 @@
+---
+- name: Générer le certificat TLS multiservice EduSmart
+  hosts: docker_hosts
+  serial: 1
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../inventories/production/vault/pki.yml
+
+  vars:
+    pki_server_common_name: "{{ web_tls_common_name }}"
+    pki_server_subject_alt_names: "{{ web_tls_subject_alt_names }}"
+    pki_server_verify_names: "{{ web_tls_verify_names }}"
+
+    pki_server_directory: "{{ web_tls_directory }}"
+    pki_server_private_key_path: "{{ web_tls_private_key_path }}"
+    pki_server_certificate_path: "{{ web_tls_certificate_path }}"
+    pki_server_ca_certificate_path: "{{ web_tls_ca_certificate_path }}"
+
+  roles:
+    - role: pki_ldap_server
+
+  post_tasks:
+    - name: Lire le certificat multiservice
+      ansible.builtin.slurp:
+        src: "{{ web_tls_certificate_path }}"
+      register: web_tls_certificate
+
+    - name: Lire le certificat de la CA
+      ansible.builtin.slurp:
+        src: "{{ web_tls_ca_certificate_path }}"
+      register: web_tls_ca_certificate
+
+    - name: Construire la chaîne complète
+      ansible.builtin.copy:
+        content: >-
+          {{
+            (web_tls_certificate.content | b64decode)
+            ~ '\n'
+            ~ (web_tls_ca_certificate.content | b64decode)
+          }}
+        dest: "{{ web_tls_fullchain_path }}"
+        owner: root
+        group: root
+        mode: "0644"
