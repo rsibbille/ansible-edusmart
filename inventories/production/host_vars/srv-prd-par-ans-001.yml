@@ -1,0 +1,5 @@
+---
+# Le contrôleur Ansible conserve AIDE installé et sa base initiale, mais le scan
+# quotidien est désactivé afin de limiter les E/S et la durée des démonstrations.
+anssi_manage_aide: false
+anssi_aide_initialize: false
