@@ -80,6 +80,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Recréer Prometheus
 
 - name: Déployer la configuration Alertmanager
   ansible.builtin.template:

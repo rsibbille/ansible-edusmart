@@ -14,6 +14,11 @@ route:
   group_wait: "{{ monitoring_alert_group_wait }}"
   group_interval: "{{ monitoring_alert_group_interval }}"
   repeat_interval: "{{ monitoring_alert_repeat_interval }}"
+  routes:
+    - receiver: email-admin
+      matchers:
+        - alertname="InstanceDown"
+      group_wait: 0s
 
 receivers:
   - name: email-admin

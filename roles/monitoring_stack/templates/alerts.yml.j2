@@ -3,13 +3,13 @@ groups:
   - name: edusmart-infrastructure
     rules:
       - alert: InstanceDown
-        expr: up == 0
-        for: 2m
+        expr: up{job=~"linux-servers|docker-host"} == 0
+        for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Cible Prometheus indisponible"
-          description: "{{ '{{' }} $labels.instance {{ '}}' }} ne répond plus depuis deux minutes."
+          description: "{{ '{{' }} $labels.instance {{ '}}' }} ne répond plus depuis une minute."
 
       - alert: HostHighCPU
         expr: |
