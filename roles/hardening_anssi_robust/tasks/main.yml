@@ -1,0 +1,366 @@
+---
+- name: Vérifier la distribution prise en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.distribution_major_version in anssi_supported_debian_majors
+    fail_msg: >-
+      Ce rôle ne prend en charge que Debian 12 et 13. Système détecté :
+      {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}.
+  tags:
+    - always
+    - anssi_preflight
+
+- name: Refuser les options génériques volontairement non implémentées
+  ansible.builtin.assert:
+    that:
+      - not anssi_fix_world_writable_files | bool
+      - not anssi_enable_host_firewall | bool
+    fail_msg: >-
+      La correction récursive des fichiers world-writable et le pare-feu local
+      générique sont volontairement refusés avant toute modification. Utiliser le
+      rapport d'audit pour corriger au cas par cas et créer des règles nftables
+      propres à chaque groupe de services.
+  tags:
+    - always
+    - anssi_preflight
+
+- name: Identifier les mesures potentiellement disruptives demandées
+  ansible.builtin.set_fact:
+    anssi_disruptive_changes_requested: >-
+      {{
+        (anssi_disable_ipv6 | bool)
+        or (anssi_manage_rp_filter | bool and anssi_rp_filter_mode | int == 1)
+        or (anssi_manage_ipv4_forwarding | bool)
+        or (anssi_disable_unprivileged_userns | bool)
+        or (anssi_disable_kexec | bool)
+        or (anssi_disable_kernel_module_loading | bool)
+        or (anssi_blacklist_kernel_modules | length > 0)
+        or (anssi_disable_services | length > 0)
+        or (anssi_fix_world_writable_files | bool)
+        or (anssi_enable_host_firewall | bool)
+        or (anssi_sudo_requiretty | bool)
+        or (anssi_sudo_noexec | bool)
+        or (anssi_sudo_iolog | bool)
+        or (anssi_audit_all_execve | bool)
+        or (anssi_audit_immutable | bool)
+        or (anssi_apparmor_enforce_profiles | length > 0)
+      }}
+  tags:
+    - always
+    - anssi_preflight
+
+- name: Bloquer les changements disruptifs sans validation explicite
+  ansible.builtin.assert:
+    that:
+      - not (anssi_disruptive_changes_requested | bool) or anssi_acknowledge_disruptive_changes | bool
+    fail_msg: >-
+      Une ou plusieurs mesures disruptives ont été demandées. Elles peuvent couper
+      SSH, casser Docker/Tailscale/Teleport/NFS/LDAP/SMTP, empêcher le chargement
+      de modules, saturer les journaux ou capturer des secrets. Définir
+      anssi_acknowledge_disruptive_changes=true uniquement après revue des
+      variables d'hôte et test sur une machine canari.
+  tags:
+    - always
+    - anssi_preflight
+
+- name: Afficher les exceptions de sécurité conservées pour EduSmart
+  ansible.builtin.debug:
+    msg:
+      - "Pare-feu local non géré par défaut : OPNsense reste le point de filtrage principal."
+      - "IPv4 forwarding non modifié : indispensable à Docker, aux routeurs et à certains VPN."
+      - "requiretty/noexec sudo non imposés : incompatibles avec Ansible et diverses automatisations."
+      - "Chargement des modules noyau non verrouillé : mesure irréversible jusqu'au redémarrage."
+      - "AppArmor : seuls les profils explicitement validés peuvent passer en enforce."
+  tags:
+    - always
+    - anssi_preflight
+
+- name: Installer les outils de sécurité du profil ANSSI
+  ansible.builtin.apt:
+    name: "{{ anssi_security_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - anssi_packages
+
+- name: Déployer le profil sysctl ANSSI adapté
+  ansible.builtin.template:
+    src: 99-anssi-robust.conf.j2
+    dest: /etc/sysctl.d/99-anssi-robust.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Appliquer les paramètres sysctl ANSSI
+  when: anssi_manage_sysctl | bool
+  tags:
+    - anssi_sysctl
+
+- name: Configurer la rotation d'auditd
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "^\\s*{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+    backup: true
+  loop:
+    - { key: max_log_file, value: "{{ anssi_audit_max_log_file_mb }}" }
+    - { key: num_logs, value: "{{ anssi_audit_num_logs }}" }
+    - { key: max_log_file_action, value: ROTATE }
+    - { key: space_left_action, value: SYSLOG }
+    - { key: admin_space_left_action, value: SUSPEND }
+    - { key: disk_full_action, value: SUSPEND }
+    - { key: disk_error_action, value: SYSLOG }
+  when: anssi_manage_auditd | bool
+  notify: Redémarrer auditd
+  tags:
+    - anssi_auditd
+
+- name: Déployer les règles auditd ANSSI adaptées
+  ansible.builtin.template:
+    src: anssi.rules.j2
+    dest: /etc/audit/rules.d/99-anssi.rules
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  when: anssi_manage_auditd | bool
+  notify: Recharger les règles auditd ANSSI
+  tags:
+    - anssi_auditd
+
+- name: Vérifier la compilation des règles auditd
+  ansible.builtin.command:
+    cmd: /sbin/augenrules --check
+  changed_when: false
+  when: anssi_manage_auditd | bool
+  tags:
+    - anssi_auditd
+    - anssi_validation
+
+- name: Activer auditd
+  ansible.builtin.systemd_service:
+    name: auditd.service
+    enabled: true
+    state: started
+  when: anssi_manage_auditd | bool
+  tags:
+    - anssi_auditd
+
+- name: Créer le répertoire de surcharge journald
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: anssi_manage_journald | bool
+  tags:
+    - anssi_journald
+
+- name: Déployer la configuration journald persistante et bornée
+  ansible.builtin.template:
+    src: 99-anssi-journald.conf.j2
+    dest: /etc/systemd/journald.conf.d/99-anssi.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when: anssi_manage_journald | bool
+  notify: Redémarrer journald
+  tags:
+    - anssi_journald
+
+- name: Activer AppArmor sans forcer tous les profils
+  ansible.builtin.systemd_service:
+    name: apparmor.service
+    enabled: true
+    state: started
+  when: anssi_manage_apparmor | bool
+  tags:
+    - anssi_apparmor
+
+- name: Passer en enforce uniquement les profils AppArmor validés
+  ansible.builtin.command:
+    cmd: "aa-enforce {{ item }}"
+  loop: "{{ anssi_apparmor_enforce_profiles }}"
+  register: anssi_apparmor_enforce_result
+  changed_when: "'Setting' in anssi_apparmor_enforce_result.stdout"
+  when:
+    - anssi_manage_apparmor | bool
+    - anssi_apparmor_enforce_profiles | length > 0
+  tags:
+    - anssi_apparmor
+    - anssi_disruptive
+
+- name: Vérifier l'état AppArmor
+  ansible.builtin.command:
+    cmd: aa-status
+  register: anssi_apparmor_status
+  changed_when: false
+  when: anssi_manage_apparmor | bool
+  tags:
+    - anssi_apparmor
+    - anssi_validation
+
+- name: Vérifier si la base AIDE existe
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db
+  register: anssi_aide_database
+  when: anssi_manage_aide | bool
+  tags:
+    - anssi_aide
+
+- name: Initialiser la base AIDE
+  ansible.builtin.command:
+    cmd: aideinit --yes
+    creates: /var/lib/aide/aide.db
+  when:
+    - anssi_manage_aide | bool
+    - anssi_aide_initialize | bool
+    - not anssi_aide_database.stat.exists
+  tags:
+    - anssi_aide
+
+- name: Relever la présence du timer AIDE Debian
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files dailyaidecheck.timer --no-legend
+  register: anssi_aide_timer_unit
+  changed_when: false
+  failed_when: false
+  when: anssi_manage_aide | bool
+  tags:
+    - anssi_aide
+
+- name: Activer le contrôle AIDE quotidien lorsqu'il est fourni par Debian
+  ansible.builtin.systemd_service:
+    name: dailyaidecheck.timer
+    enabled: true
+    state: started
+  when:
+    - anssi_manage_aide | bool
+    - "'dailyaidecheck.timer' in anssi_aide_timer_unit.stdout"
+  tags:
+    - anssi_aide
+
+- name: Déployer les réglages sudo compatibles avec Ansible
+  ansible.builtin.template:
+    src: 99-anssi-sudoers.j2
+    dest: /etc/sudoers.d/99-anssi-hardening
+    owner: root
+    group: root
+    mode: "0440"
+    backup: true
+    validate: /usr/sbin/visudo -cf %s
+  when: anssi_manage_sudo | bool
+  tags:
+    - anssi_sudo
+
+- name: Borner la taille du journal sudo
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/anssi-sudo
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /var/log/sudo.log {
+          weekly
+          rotate 12
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0600 root root
+      }
+  when: anssi_manage_sudo | bool
+  tags:
+    - anssi_sudo
+
+- name: Définir l'UMASK par défaut
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^UMASK\s+'
+    line: "UMASK           {{ anssi_default_umask }}"
+    backup: true
+  when: anssi_manage_login_defaults | bool
+  tags:
+    - anssi_accounts
+
+- name: Déployer l'expiration des sessions shell interactives
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-anssi-session-timeout.sh
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible - interactive shells only
+      if [ "${PS1-}" ]; then
+        readonly TMOUT={{ anssi_shell_timeout_seconds }}
+        export TMOUT
+      fi
+  when:
+    - anssi_manage_login_defaults | bool
+    - anssi_shell_timeout_seconds | int > 0
+  tags:
+    - anssi_accounts
+
+- name: Déployer les blacklists de modules explicitement validées
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/99-anssi-blacklist.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    content: |
+      # Managed by Ansible - reviewed modules only
+      {% for module in anssi_blacklist_kernel_modules %}
+      blacklist {{ module }}
+      install {{ module }} /bin/false
+      {% endfor %}
+  when: anssi_blacklist_kernel_modules | length > 0
+  tags:
+    - anssi_modules
+    - anssi_disruptive
+
+- name: Désactiver uniquement les services explicitement validés
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ anssi_disable_services }}"
+  when: anssi_disable_services | length > 0
+  tags:
+    - anssi_services
+    - anssi_disruptive
+
+- name: Créer le répertoire des rapports de conformité
+  ansible.builtin.file:
+    path: /var/log/anssi-hardening
+    state: directory
+    owner: root
+    group: adm
+    mode: "0750"
+  when: anssi_generate_filesystem_audit | bool
+  tags:
+    - anssi_audit
+
+- name: Auditer les fichiers sensibles sans modifier les droits automatiquement
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -o pipefail
+      report=/var/log/anssi-hardening/filesystem-audit.txt
+      {
+        echo "===== ANSSI filesystem audit $(date --iso-8601=seconds) ====="
+        echo "--- Fichiers world-writable ---"
+        find / -xdev -type f -perm -0002 -print 2>/dev/null
+        echo "--- Fichiers sans propriétaire ou groupe connu ---"
+        find / -xdev \( -nouser -o -nogroup \) -print 2>/dev/null
+        echo "--- Exécutables setuid/setgid ---"
+        find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print 2>/dev/null
+      } > "$report"
+  changed_when: false
+  when: anssi_generate_filesystem_audit | bool
+  tags:
+    - anssi_audit

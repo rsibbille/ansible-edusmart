@@ -1,8 +1,44 @@
 ---
-- name: Durcir les accès SSH des serveurs Linux EduSmart
+- name: Appliquer le durcissement Linux ANSSI robuste adapté à EduSmart
   hosts: "{{ target_hosts | default('ansible_controllers:linux_servers') }}"
   become: true
-  gather_facts: false
+  gather_facts: true
+  serial: "{{ hardening_serial | default(1) }}"
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Vérifier que la connexion Ansible est opérationnelle avant durcissement
+      ansible.builtin.ping:
+      tags:
+        - always
+        - anssi_preflight
 
   roles:
+    - role: hardening_anssi_robust
+      tags:
+        - anssi
     - role: hardening_ssh
+      tags:
+        - ssh
+
+  post_tasks:
+    - name: Appliquer les handlers avant les contrôles finaux
+      ansible.builtin.meta: flush_handlers
+
+    - name: Valider la configuration OpenSSH finale
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+      tags:
+        - always
+        - anssi_validation
+
+    - name: Vérifier que le service SSH reste actif
+      ansible.builtin.command:
+        cmd: systemctl is-active ssh.service
+      register: hardening_ssh_service_state
+      changed_when: false
+      failed_when: hardening_ssh_service_state.stdout | trim != 'active'
+      tags:
+        - always
+        - anssi_validation

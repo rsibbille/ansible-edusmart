@@ -1,0 +1,23 @@
+# Managed by Ansible - validate with visudo
+{% if anssi_sudo_use_pty | bool %}
+Defaults use_pty
+{% endif %}
+Defaults umask={{ anssi_default_umask }}
+Defaults timestamp_timeout={{ anssi_sudo_timestamp_timeout_minutes }}
+Defaults passwd_tries=3
+Defaults logfile="/var/log/sudo.log"
+Defaults env_reset
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+{% if anssi_sudo_requiretty | bool %}
+# ATTENTION : casse généralement Ansible, les tâches non interactives et certains outils CI/CD.
+Defaults requiretty
+{% endif %}
+{% if anssi_sudo_noexec | bool %}
+# ATTENTION : peut empêcher une commande autorisée d'appeler ses sous-commandes.
+Defaults noexec
+{% endif %}
+{% if anssi_sudo_iolog | bool %}
+# ATTENTION : peut capturer des secrets et consommer beaucoup d'espace disque.
+Defaults log_input,log_output
+Defaults iolog_dir="/var/log/sudo-io/%{user}"
+{% endif %}

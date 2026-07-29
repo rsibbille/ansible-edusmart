@@ -1,0 +1,58 @@
+---
+- name: Démonstration non destructive de validation Ansible EduSmart
+  hosts: "{{ target_hosts | default('ansible_controllers:linux_servers') }}"
+  gather_facts: true
+  become: true
+  serial: 1
+
+  tasks:
+    - name: Vérifier la connectivité Ansible
+      ansible.builtin.ping:
+
+    - name: Valider la syntaxe de la configuration OpenSSH
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+
+    - name: Vérifier que le service SSH est actif
+      ansible.builtin.command:
+        cmd: systemctl is-active ssh.service
+      register: demo_ssh_state
+      changed_when: false
+      failed_when: demo_ssh_state.stdout | trim != 'active'
+
+    - name: Relever la présence du profil ANSSI
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-anssi-robust.conf
+      register: demo_anssi_profile
+
+    - name: Lire l'état IPv6 sans le modifier
+      ansible.builtin.command:
+        cmd: /usr/sbin/sysctl -n net.ipv6.conf.all.disable_ipv6
+      register: demo_ipv6_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Lire la durée de fonctionnement
+      ansible.builtin.command:
+        cmd: /usr/bin/uptime -p
+      register: demo_uptime
+      changed_when: false
+
+    - name: Lire l'espace disponible sur la racine
+      ansible.builtin.command:
+        cmd: /usr/bin/df -h /
+      register: demo_disk
+      changed_when: false
+
+    - name: Afficher le résumé de validation
+      ansible.builtin.debug:
+        msg:
+          - "Hôte : {{ inventory_hostname }}"
+          - "Système : {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+          - "Adresse principale : {{ ansible_facts.default_ipv4.address | default('non détectée') }}"
+          - "SSH : {{ demo_ssh_state.stdout | trim }}"
+          - "Profil ANSSI présent : {{ demo_anssi_profile.stat.exists }}"
+          - "IPv6 désactivé : {{ demo_ipv6_disabled.stdout | default('inconnu') | trim }}"
+          - "Uptime : {{ demo_uptime.stdout | trim }}"
+          - "Disque racine : {{ demo_disk.stdout_lines | last }}"
